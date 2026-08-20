@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "foundationVersion": "1.0.0",
+  "mode": "upstream",
+  "activeProfiles": [
+    "core",
+    "typescript",
+    "scss",
+    "docker"
+  ],
+  "upstream": "https://github.com/DevCrop/project-foundation",
+  "managedFiles": {
+    ".agents/skills/architecture-selection/SKILL.md": "c131675e3e1ece7bd6f585293fe69a5913e83d220b12f2bc65c820b0869e4541",
+    ".claude/skills/architecture-selection/SKILL.md": "6809d7e6043bcff2046e94b501f52033611f3e24489fda0f6e0fb91b8e7e9ee8",
+    ".cursor/rules/project.mdc": "75db0443604241802748926d9191ff2bd28a7cc51b53a0e6de0075a1989236d4",
+    ".editorconfig": "26be881aedfa57182275dece429ba423f9c46038489515347a4d54287fb1acae",
+    ".foundation/toolchain.json": "b8762fc6e7602e532dc7c6ee5a100a1dab949719c5619edd2ea5c070661a4112",
+    ".gitattributes": "394a96f6b27ce26696fccc03628b12f000f1c58d94bd40cfde57799fef2064ec",
+    ".github/CODEOWNERS": "4485cde6604f923cafb8377c2a243866c014b560c36d7b23311a4885e0f9a8e8",
+    ".github/ISSUE_TEMPLATE/change.yml": "1764532414e65ed83e7114132d691d7e7f208e5e2d98f59dfaa4fc330eb74c00",
+    ".github/PULL_REQUEST_TEMPLATE.md": "a1df257637a146876c7ca23102d4e0dcfcd40232fe7ef7cff563ec0f511458cd",
+    ".github/dependabot.yml": "11679cd037a4be5206878025a31a183a3cf811f240c36df0c54959a93ec0e6c4",
+    ".github/workflows/dependency-review.yml": "365e2190faa5ec30ac69a23ead6332dc92c507d717d8ed0be5fff074481a7ab8",
+    ".github/workflows/quality.yml": "0b1107d048f257e6b65a3c538cec96656fe9354c0a7f91d33a2decc3c968c530",
+    "AGENTS.md": "75d92911cb53aa4b1b7b3fbbb92d7f8654e332934e477e366a94e2cfae013c88",
+    "CLAUDE.md": "da44180b787eab7519061e410c7156607f97fbe2b2a4e97d9bf4af22517ccb75",
+    "FOUNDATION.md": "f7b2c6d426252aca709756fc6e0fc3727f7a4bca278d90cef531d231f729c47d",
+    "SECURITY.md": "0dcbe0c899627cc441f936edeb19763988c0dc48a1ec195a9f6dda4ad0977c1a",
+    "SOURCES.json": "3c9fcacf73261f9f21637616a4cb97605f8303dd7a0eb775c89c621e3d522d16",
+    "scripts/foundation.mjs": "10004ed830080c36fe1c24a8f0a8ea88e9321b72f86c0adaea04812fe34e3a4d"
+  },
+  "seedFiles": [
+    ".dockerignore",
+    ".env.example",
+    ".gitignore",
+    "Dockerfile",
+    "LICENSE",
+    "Makefile",
+    "PROJECT.md",
+    "README.md",
+    "compose.yaml",
+    "package-lock.json",
+    "package.json",
+    "src/main.ts",
+    "styles/_mixins.scss",
+    "styles/_tokens.scss",
+    "styles/main.scss",
+    "tsconfig.json"
+  ],
+  "upstreamOnlyFiles": [
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "scripts/foundation.test.mjs",
+    ".github/workflows/release.yml"
+  ]
+}

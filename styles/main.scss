@@ -1,0 +1,11 @@
+@use "tokens";
+@use "mixins";
+
+:root {
+  color: tokens.$color-text;
+  background: tokens.$color-surface;
+}
+
+:focus-visible {
+  @include mixins.focus-ring(currentColor);
+}

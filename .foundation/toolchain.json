@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-08-21",
+  "node": {
+    "default": "24.19.0",
+    "supported": ["22.23.2", "24.19.0"],
+    "range": ">=22.22.0 <25"
+  },
+  "npm": {
+    "default": "12.0.2",
+    "minimum": "11.8.0",
+    "tested": ["11.8.0", "11.17.0", "12.0.2"]
+  },
+  "docker": {
+    "tested": "28.0.4",
+    "baseImage": "node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03",
+    "dockerfileFrontend": "docker/dockerfile:1.12@sha256:93bfd3b68c109427185cd78b4779fc82b484b0b7618e36d0f104d4d801e66d25"
+  },
+  "compose": {
+    "minimum": "2.22.0",
+    "tested": "2.34.0"
+  },
+  "buildx": {
+    "minimum": "0.15.0",
+    "tested": "0.22.0"
+  },
+  "make": {
+    "optional": true,
+    "tested": "4.4.1"
+  },
+  "githubCli": {
+    "requiredFor": ["github plan", "github apply"],
+    "tested": "2.96.0"
+  },
+  "profiles": ["core", "typescript", "scss", "docker"]
+}

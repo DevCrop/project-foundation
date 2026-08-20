@@ -1,0 +1,27 @@
+{
+  "name": "project-foundation",
+  "version": "1.0.0",
+  "description": "Reusable project rules, validation, agent integration, and automation foundation",
+  "private": false,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.22.0 <25"
+  },
+  "packageManager": "npm@12.0.2",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "styles:build": "sass --no-source-map styles/main.scss dist/styles.css",
+    "start": "node dist/main.js",
+    "test": "node --test scripts/foundation.test.mjs",
+    "validate": "node scripts/foundation.mjs validate --strict",
+    "doctor": "node scripts/foundation.mjs doctor",
+    "release:check": "node scripts/foundation.mjs validate --strict"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "sass": "1.103.0",
+    "typescript": "7.0.2"
+  }
+}
