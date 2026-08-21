@@ -1,0 +1,33 @@
+{
+  "description": "Project Foundation context and stop verification hooks.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/foundation.mjs\" agent hook session-start",
+            "commandWindows": "powershell -NoProfile -Command \"$root = git rev-parse --show-toplevel; node (Join-Path $root 'scripts/foundation.mjs') agent hook session-start\"",
+            "statusMessage": "Loading Project Foundation context",
+            "additionalContextLimit": 5000,
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/foundation.mjs\" agent hook stop",
+            "commandWindows": "powershell -NoProfile -Command \"$root = git rev-parse --show-toplevel; node (Join-Path $root 'scripts/foundation.mjs') agent hook stop\"",
+            "statusMessage": "Verifying Project Foundation policy",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
+  }
+}

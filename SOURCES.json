@@ -9,6 +9,7 @@
     "docs.github.com",
     "docs.npmjs.com",
     "git-scm.com",
+    "learn.chatgpt.com",
     "nodejs.org",
     "sass-lang.com",
     "semver.org",
@@ -23,6 +24,22 @@
       "verifiedAt": "2026-08-21",
       "reviewIntervalDays": 31,
       "covers": ["AGENTS.md discovery", "instruction precedence", "size limits"]
+    },
+    {
+      "id": "codex-hooks",
+      "provider": "OpenAI",
+      "url": "https://learn.chatgpt.com/docs/hooks",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["project hooks", "SessionStart", "Stop", "commandWindows", "hook trust"]
+    },
+    {
+      "id": "codex-skills",
+      "provider": "OpenAI",
+      "url": "https://learn.chatgpt.com/docs/build-skills",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["Agent Skills", ".agents/skills"]
     },
     {
       "id": "cursor-rules",
@@ -97,6 +114,14 @@
       "covers": ["npm", "docker", "docker-compose", "github-actions"]
     },
     {
+      "id": "github-immutable-releases",
+      "provider": "GitHub",
+      "url": "https://docs.github.com/en/rest/repos/repos#enable-immutable-releases",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["immutable releases", "release asset immutability"]
+    },
+    {
       "id": "node-release-policy",
       "provider": "Node.js",
       "url": "https://nodejs.org/en/about/previous-releases",
@@ -110,7 +135,7 @@
       "url": "https://docs.npmjs.com/cli/commands/npm-ci/",
       "verifiedAt": "2026-08-21",
       "reviewIntervalDays": 31,
-      "covers": ["frozen install", "package-lock.json"]
+      "covers": ["frozen install", "package-lock.json", "allowScripts"]
     },
     {
       "id": "semantic-versioning",

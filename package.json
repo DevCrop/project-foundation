@@ -9,8 +9,12 @@
     "node": ">=22.22.0 <25"
   },
   "packageManager": "npm@12.0.2",
+  "allowScripts": {
+    "@parcel/watcher@2.6.0": true
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run styles:build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "styles:build": "sass --no-source-map styles/main.scss dist/styles.css",
     "start": "node dist/main.js",
     "test": "node --test scripts/foundation.test.mjs",

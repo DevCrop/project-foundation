@@ -11,9 +11,8 @@
 기본 검증:
 
 ```text
-npm test
-node scripts/foundation.mjs validate --strict
-git diff --check
+node scripts/foundation.mjs verify --base origin/main
 ```
 
 구조나 디자인 패턴 변경 전에는 `architecture-selection` Skill로 후보와 파일 증가량을 비교하고 사용자 승인을 받는다.
+일반 구현 변경에는 `change-workflow` Skill로 기존 구현·타입·SCSS 자산 검색, 파일 생성 근거, 의존성 검토, 테스트와 최종 diff 검토를 수행한다.

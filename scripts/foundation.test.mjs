@@ -6,6 +6,7 @@ import {
   cp,
   lstat,
   mkdtemp,
+  mkdir,
   readFile,
   rm,
   symlink,
@@ -45,11 +46,12 @@ async function copyFoundation() {
   return target;
 }
 
-function runCli(root, args, environment = {}, scriptRoot = root) {
+function runCli(root, args, environment = {}, scriptRoot = root, input) {
   return spawnSync(process.execPath, [path.join(scriptRoot, "scripts", "foundation.mjs"), ...args], {
     cwd: root,
     encoding: "utf8",
     env: { ...process.env, ...environment },
+    input,
     timeout: 30_000,
     windowsHide: true,
   });
@@ -177,17 +179,17 @@ test("upstream passes strict validation", async () => {
   assert.ok(result.sourceCount >= 20);
 });
 
-test("typescript, scss, and docker initialization is deterministic", async () => {
+test("node, github, typescript, scss, and docker initialization is deterministic", async () => {
   const first = await copyFoundation();
   const second = await copyFoundation();
   for (const root of [first, second]) {
-    const result = runCli(root, ["init", "--profile", "typescript,scss,docker", "--project-name", "sample-app"]);
+    const result = runCli(root, ["init", "--runtime", "node", "--profile", "github,docker,typescript,scss", "--project-name", "sample-app", "--owner", "DevCrop"]);
     assert.equal(result.status, 0, result.stderr);
   }
   assert.deepEqual(await snapshotTree(first), await snapshotTree(second));
   const manifest = JSON.parse(await readFile(path.join(first, ".foundation", "manifest.json"), "utf8"));
   assert.equal(manifest.mode, "consumer");
-  assert.deepEqual(manifest.activeProfiles, ["core", "typescript", "scss", "docker"]);
+  assert.deepEqual(manifest.activeProfiles, ["core", "node", "github", "docker", "typescript", "scss"]);
   assert.equal(await readFile(path.join(first, "PROJECT.md"), "utf8").then((text) => text.includes("sample-app")), true);
   const install = runNpm(first, ["ci", "--ignore-scripts"]);
   assert.equal(install.status, 0, install.stderr);
@@ -196,18 +198,34 @@ test("typescript, scss, and docker initialization is deterministic", async () =>
   assert.equal(runCli(first, ["validate", "--strict"]).status, 0);
 });
 
-test("core initialization removes optional and upstream-only files", async () => {
+test("plain Node Docker initialization does not require TypeScript or SCSS", async () => {
   const root = await copyFoundation();
-  const result = runCli(root, ["init", "--profile", "core", "--project-name", "core-only"]);
+  const result = runCli(root, ["init", "--runtime", "node", "--profile", "docker", "--project-name", "plain-node"]);
+  assert.equal(result.status, 0, result.stderr);
+  await assert.rejects(lstat(path.join(root, "tsconfig.json")));
+  await assert.rejects(lstat(path.join(root, "styles", "main.scss")));
+  assert.equal((await lstat(path.join(root, "src", "main.js"))).isFile(), true);
+  const install = runNpm(root, ["ci", "--ignore-scripts"]);
+  assert.equal(install.status, 0, install.stderr);
+  const build = runNpm(root, ["run", "build"]);
+  assert.equal(build.status, 0, build.stderr);
+  assert.equal((await lstat(path.join(root, "dist", "main.js"))).isFile(), true);
+  assert.equal(runCli(root, ["validate", "--strict"]).status, 0);
+});
+
+test("core custom initialization creates no npm or language-specific files", async () => {
+  const root = await copyFoundation();
+  const result = runCli(root, ["init", "--runtime", "custom", "--profile", "core", "--project-name", "core-only"]);
   assert.equal(result.status, 0, result.stderr);
   for (const relativePath of ["Dockerfile", "compose.yaml", "Makefile", "tsconfig.json", "src/main.ts", "styles/main.scss", "CHANGELOG.md", "CONTRIBUTING.md", "scripts/foundation.test.mjs", ".github/workflows/release.yml"]) {
     await assert.rejects(lstat(path.join(root, relativePath)));
   }
   const validation = await validateProject(root, { strict: false, now: new Date("2026-08-21T12:00:00Z") });
   assert.deepEqual(validation.errors, []);
-  const install = runNpm(root, ["ci", "--ignore-scripts"]);
-  assert.equal(install.status, 0, install.stderr);
-  assert.equal(runNpm(root, ["test"]).status, 0);
+  for (const relativePath of ["package.json", "package-lock.json"]) await assert.rejects(lstat(path.join(root, relativePath)));
+  const configuration = JSON.parse(await readFile(path.join(root, ".foundation", "project.json"), "utf8"));
+  assert.equal(configuration.project.runtime, "custom");
+  assert.deepEqual(configuration.commands, {});
 });
 
 test("initialization refuses unrelated existing files and preserves them", async () => {
@@ -336,13 +354,133 @@ test("Docker and package-manager policy violations are detected", async () => {
   assert.ok(result.errors.some((error) => error.includes("version tag and SHA-256")));
 });
 
-test("GitHub apply requires exact repository and explicit confirmation", () => {
-  const wrongRepo = runCli(ROOT, ["github", "apply", "--repo", "someone/example", "--confirm"]);
+test("GitHub apply requires exact repository confirmation", () => {
+  const wrongRepo = runCli(ROOT, ["github", "apply", "--repo", "someone/example", "--confirm", "someone/other"]);
   assert.notEqual(wrongRepo.status, 0);
-  assert.match(wrongRepo.stderr, /restricted/);
+  assert.match(wrongRepo.stderr, /exact owner\/name/);
   const missingConfirm = runCli(ROOT, ["github", "apply", "--repo", "DevCrop/project-foundation"]);
   assert.notEqual(missingConfirm.status, 0);
-  assert.match(missingConfirm.stderr, /requires --confirm/);
+  assert.match(missingConfirm.stderr, /exact owner\/name/);
+});
+
+test("custom Docker adoption is deterministic and preserves existing files", async () => {
+  const root = await temporaryDirectory();
+  const baseImage = "node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03";
+  await writeFile(path.join(root, "README.md"), "기존 프로젝트 문서\n", "utf8");
+  await writeFile(path.join(root, "Dockerfile"), `ARG BASE_IMAGE=${baseImage}\nFROM \${BASE_IMAGE} AS build\nRUN --mount=type=cache,target=/tmp/cache true\nFROM build AS test\nRUN true\nFROM build AS development\nCMD ["node", "--version"]\nFROM build AS production\nUSER 65532\nHEALTHCHECK CMD ["true"]\nCMD ["node", "--version"]\n`, "utf8");
+  await mkdir(path.join(root, ".foundation"), { recursive: true });
+  await writeFile(path.join(root, ".foundation", "project.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    project: { name: "legacy-app", runtime: "custom" },
+    commands: {
+      test: { command: "node", args: ["--version"] },
+      build: { command: "node", args: ["--version"] },
+      start: { command: "node", args: ["--version"] },
+    },
+    docker: { enabled: true, file: "Dockerfile", service: "app", port: 3000, targets: { development: "development", test: "test", production: "production" } },
+    github: { visibility: "preserve", defaultBranch: "main" },
+  }, null, 2)}\n`, "utf8");
+
+  const args = ["adopt", "plan", "--runtime", "custom", "--profile", "github,docker", "--project-name", "legacy-app", "--owner", "DevCrop"];
+  const first = runCli(root, args, {}, ROOT);
+  const second = runCli(root, args, {}, ROOT);
+  assert.equal(first.status, 0, first.stderr);
+  assert.equal(second.status, 0, second.stderr);
+  const firstPlan = JSON.parse(first.stdout);
+  const secondPlan = JSON.parse(second.stdout);
+  assert.equal(firstPlan.planSha, secondPlan.planSha);
+  assert.deepEqual(firstPlan.conflicts, []);
+
+  const apply = runCli(root, ["adopt", "apply", "--plan-sha", firstPlan.planSha, "--confirm"], {}, ROOT);
+  assert.equal(apply.status, 0, apply.stderr);
+  assert.equal(await readFile(path.join(root, "README.md"), "utf8"), "기존 프로젝트 문서\n");
+  await assert.rejects(lstat(path.join(root, "package.json")));
+  const configuration = JSON.parse(await readFile(path.join(root, ".foundation", "project.json"), "utf8"));
+  assert.equal(configuration.project.runtime, "custom");
+  assert.equal(configuration.docker.enabled, true);
+  const validation = runCli(root, ["validate", "--strict"]);
+  assert.equal(validation.status, 0, validation.stderr);
+  if (process.env.FOUNDATION_DOCKER_TESTS === "1") {
+    const check = spawnSync("docker", ["buildx", "build", "--check", "--file", "Dockerfile", "."], { cwd: root, encoding: "utf8", timeout: 120_000, windowsHide: true });
+    assert.equal(check.status, 0, check.stderr);
+    const build = spawnSync("docker", ["build", "--file", "Dockerfile", "--target", "production", "--tag", "foundation-custom-fixture:test", "."], { cwd: root, encoding: "utf8", timeout: 120_000, windowsHide: true });
+    assert.equal(build.status, 0, build.stderr);
+  }
+});
+
+test("adoption detects workflow conflicts without changing the project", async () => {
+  const root = await temporaryDirectory();
+  await mkdir(path.join(root, ".github", "workflows"), { recursive: true });
+  await writeFile(path.join(root, ".github", "workflows", "quality.yml"), "name: existing\n", "utf8");
+  const before = await snapshotTree(root);
+  const plan = runCli(root, ["adopt", "plan", "--runtime", "custom", "--profile", "github", "--owner", "DevCrop"], {}, ROOT);
+  assert.equal(plan.status, 0, plan.stderr);
+  const parsed = JSON.parse(plan.stdout);
+  assert.ok(parsed.conflicts.includes(".github/workflows/quality.yml"));
+  const apply = runCli(root, ["adopt", "apply", "--plan-sha", parsed.planSha, "--confirm"], {}, ROOT);
+  assert.notEqual(apply.status, 0);
+  assert.deepEqual(await snapshotTree(root), before);
+});
+
+test("adoption plan SHA is invalidated by any project state change", async () => {
+  const root = await temporaryDirectory();
+  await writeFile(path.join(root, "README.md"), "before\n", "utf8");
+  const plan = runCli(root, ["adopt", "plan", "--runtime", "custom", "--profile", "core"], {}, ROOT);
+  assert.equal(plan.status, 0, plan.stderr);
+  const parsed = JSON.parse(plan.stdout);
+  await appendFile(path.join(root, "README.md"), "after\n", "utf8");
+  const apply = runCli(root, ["adopt", "apply", "--plan-sha", parsed.planSha, "--confirm"], {}, ROOT);
+  assert.notEqual(apply.status, 0);
+  assert.match(apply.stderr, /state changed/);
+  await assert.rejects(lstat(path.join(root, ".foundation", "manifest.json")));
+});
+
+test("agent adapters, hook commands, and stable check names are connected", async () => {
+  const hooks = JSON.parse(await readFile(path.join(ROOT, ".codex", "hooks.json"), "utf8"));
+  for (const event of ["SessionStart", "Stop"]) {
+    const handler = hooks.hooks[event][0].hooks[0];
+    assert.match(handler.command, /git rev-parse --show-toplevel/);
+    assert.match(handler.commandWindows, /git rev-parse --show-toplevel/);
+  }
+  const claude = await readFile(path.join(ROOT, "CLAUDE.md"), "utf8");
+  for (const reference of ["@AGENTS.md", "@FOUNDATION.md", "@PROJECT.md"]) assert.match(claude, new RegExp(reference.replace(".", "\\.")));
+  const cursor = await readFile(path.join(ROOT, ".cursor", "rules", "project.mdc"), "utf8");
+  assert.match(cursor, /@FOUNDATION\.md/);
+  assert.match(cursor, /@PROJECT\.md/);
+  const quality = await readFile(path.join(ROOT, ".github", "workflows", "quality.yml"), "utf8");
+  const dependency = await readFile(path.join(ROOT, ".github", "workflows", "dependency-review.yml"), "utf8");
+  for (const check of ["foundation-policy", "project-quality", "container"]) assert.match(quality, new RegExp(`name: ${check}`));
+  assert.match(dependency, /name: dependency-gate/);
+});
+
+test("Stop hook blocks once and then reports a final failure", async () => {
+  const root = await copyFoundation();
+  const initialized = runCli(root, ["init", "--runtime", "custom", "--profile", "core", "--project-name", "hook-test"]);
+  assert.equal(initialized.status, 0, initialized.stderr);
+  assert.equal(spawnSync("git", ["init"], { cwd: root, encoding: "utf8" }).status, 0);
+  await appendFile(path.join(root, "AGENTS.md"), "\ninvalid managed edit\n", "utf8");
+
+  const first = runCli(root, ["agent", "hook", "stop"], {}, root, '{"stop_hook_active":false}');
+  assert.equal(first.status, 0, first.stderr);
+  const firstOutput = JSON.parse(first.stdout);
+  assert.equal(firstOutput.decision, "block");
+  assert.match(firstOutput.reason, /Modified managed file: AGENTS\.md/);
+
+  const second = runCli(root, ["agent", "hook", "stop"], {}, root, '{"stop_hook_active":true}');
+  assert.equal(second.status, 0, second.stderr);
+  const secondOutput = JSON.parse(second.stdout);
+  assert.equal(secondOutput.continue, false);
+  assert.match(secondOutput.stopReason, /Modified managed file: AGENTS\.md/);
+});
+
+test("branch policy rejects names outside the universal convention", async () => {
+  const root = await copyFoundation();
+  assert.equal(runCli(root, ["init", "--runtime", "custom", "--profile", "core", "--project-name", "branch-test"]).status, 0);
+  assert.equal(spawnSync("git", ["init"], { cwd: root, encoding: "utf8" }).status, 0);
+  assert.equal(spawnSync("git", ["checkout", "-b", "Bad_Name"], { cwd: root, encoding: "utf8" }).status, 0);
+  const result = runCli(root, ["verify", "--scope", "policy"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Branch name does not match policy/);
 });
 
 test("all declared managed files exist and use regular files", async () => {

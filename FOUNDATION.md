@@ -8,6 +8,8 @@
 - `Profiles`: 적용 프로필
 - `Authority`: `SOURCES.json`의 출처 ID 또는 `policy:project-foundation`
 - `Exception`: 프로젝트 예외 허용 여부
+- `Enforced by`: `validator`, `hook`, `ci`, `github`, `review` 중 적용 수단
+- `Evidence`: 기계 검사 또는 판단 기록의 위치
 - `Rule`: 규칙 본문
 
 ## Core
@@ -18,6 +20,8 @@
 - Profiles: core
 - Authority: policy:project-foundation
 - Exception: no
+- Enforced by: review
+- Evidence: judgment: 최종 diff의 요청 범위 설명
 - Rule: 변경은 사용자가 요청한 결과와 그 결과에 필요한 검증으로 제한하고 관계없는 정리나 재구성을 포함하지 않는다.
 
 ### PF-CORE-002 — 사용자 변경 보존
@@ -26,6 +30,8 @@
 - Profiles: core
 - Authority: policy:project-foundation
 - Exception: no
+- Enforced by: hook,review
+- Evidence: 작업 전후 저장소 상태와 보존한 사용자 변경
 - Rule: 작업 전 저장소 상태를 확인하고 사용자의 기존 변경을 승인 없이 되돌리거나 덮어쓰거나 숨기지 않는다.
 
 ### PF-CORE-003 — 규칙 우선순위
@@ -34,6 +40,8 @@
 - Profiles: core
 - Authority: codex-agents-md
 - Exception: no
+- Enforced by: review
+- Evidence: judgment: 적용한 지침 계층과 충돌 해결 근거
 - Rule: 시스템과 도구 보안 정책, 현재 사용자의 명시적 요청, 프로젝트 규칙, Foundation 기본값 순서로 지침을 해석한다.
 
 ## Git and history
@@ -41,9 +49,11 @@
 ### PF-GIT-001 — 작업 브랜치
 
 - Level: MUST
-- Profiles: core
+- Profiles: core,github
 - Authority: github-rulesets
 - Exception: yes
+- Enforced by: ci,github
+- Evidence: 브랜치명 검사와 main ruleset
 - Rule: 기본 브랜치는 릴리스 가능한 상태로 유지하고 구현 변경은 집중된 작업 브랜치와 pull request를 통해 병합한다.
 
 ### PF-GIT-002 — 이력 단위
@@ -52,6 +62,8 @@
 - Profiles: core
 - Authority: policy:project-foundation
 - Exception: yes
+- Enforced by: review
+- Evidence: judgment: 커밋과 PR의 단일 변경 목적
 - Rule: 하나의 커밋과 pull request는 검토와 롤백이 가능한 하나의 논리적 변경만 표현한다.
 
 ### PF-GIT-003 — 릴리스 버전
@@ -60,6 +72,8 @@
 - Profiles: core
 - Authority: semantic-versioning
 - Exception: no
+- Enforced by: ci,github
+- Evidence: 태그·manifest·package·CHANGELOG 버전 일치
 - Rule: 공개 API의 호환성 변화는 Semantic Versioning에 따라 버전과 CHANGELOG에 함께 기록한다.
 
 ## Security
@@ -67,9 +81,11 @@
 ### PF-SEC-001 — 비밀값
 
 - Level: MUST
-- Profiles: core,docker
+- Profiles: core,github,docker
 - Authority: github-actions-security
 - Exception: no
+- Enforced by: validator,ci,review
+- Evidence: 비밀 패턴·워크플로·Docker build argument 검사
 - Rule: 인증정보와 비밀값은 소스, 로그, 이미지 레이어, build argument, 테스트 fixture에 저장하지 않고 승인된 secret 저장소에서 주입한다.
 
 ### PF-SEC-002 — 외부 입력
@@ -78,14 +94,18 @@
 - Profiles: core
 - Authority: policy:project-foundation
 - Exception: no
+- Enforced by: review
+- Evidence: judgment: 입력 경계별 검증과 실패 경로 테스트
 - Rule: 외부 입력이 경로, URL, 명령, 쿼리, HTML 또는 파일 시스템 경계에 도달하기 전에 해당 문맥에 맞게 검증하고 제한한다.
 
 ### PF-SEC-003 — 최소 권한
 
 - Level: MUST
-- Profiles: core,docker
+- Profiles: core,github,docker
 - Authority: github-actions-security
 - Exception: yes
+- Enforced by: validator,github,review
+- Evidence: Actions permissions, 컨테이너 사용자와 권한 설정
 - Rule: 자동화 토큰과 런타임 프로세스에는 작업 수행에 필요한 최소 권한만 부여하고 권한 확대는 문서화한다.
 
 ## Agent integration
@@ -96,6 +116,8 @@
 - Profiles: core
 - Authority: codex-agents-md
 - Exception: no
+- Enforced by: validator
+- Evidence: 어댑터 중복 본문과 필수 참조 검사
 - Rule: 공통 규칙 본문은 이 문서에서만 정의하고 에이전트별 파일은 로딩 순서와 원본 위치만 안내한다.
 
 ### PF-AGENT-002 — 프로젝트 결정
@@ -104,6 +126,8 @@
 - Profiles: core
 - Authority: claude-memory
 - Exception: no
+- Enforced by: validator
+- Evidence: PROJECT.md와 project.json 소유권 검사
 - Rule: 프로젝트 고유 명령, 아키텍처, 예외와 성능 예산은 PROJECT.md에서만 소유한다.
 
 ### PF-AGENT-003 — 인덱스 크기
@@ -112,6 +136,8 @@
 - Profiles: core
 - Authority: cursor-rules
 - Exception: yes
+- Enforced by: validator
+- Evidence: AGENTS.md UTF-8 바이트 크기 검사
 - Rule: 항상 로드되는 에이전트 문서는 짧은 인덱스로 유지하고 긴 절차는 필요할 때 로드하는 Skill로 분리한다.
 
 ## Architecture and files
@@ -122,6 +148,8 @@
 - Profiles: core,typescript
 - Authority: policy:project-foundation
 - Exception: yes
+- Enforced by: review
+- Evidence: judgment: 책임과 의존성 방향을 설명한 설계 검토
 - Rule: 모듈과 객체는 하나의 명확한 변경 이유를 가지며 의존성은 구체 구현보다 안정된 계약을 향하도록 설계한다.
 
 ### PF-ARCH-002 — 클래스와 함수
@@ -130,6 +158,8 @@
 - Profiles: core,typescript
 - Authority: policy:project-foundation
 - Exception: yes
+- Enforced by: review
+- Evidence: judgment: 상태·불변식·수명주기 또는 순수성 판단
 - Rule: 상태와 불변식과 수명주기가 있는 책임은 클래스로 캡슐화하고 순수 계산과 변환은 함수로 표현한다.
 
 ### PF-ARCH-003 — 패턴 선택
@@ -138,6 +168,8 @@
 - Profiles: core
 - Authority: policy:project-foundation
 - Exception: yes
+- Enforced by: review
+- Evidence: judgment: architecture-selection 비교안과 사용자 승인
 - Rule: 디자인 패턴은 프로젝트의 상태 흐름과 변경 축을 분석해 무패턴 선택과 비교한 뒤 사용자 승인 전에는 구조에 도입하지 않는다.
 
 ### PF-FILE-001 — 파일 생성 게이트
@@ -146,6 +178,8 @@
 - Profiles: core
 - Authority: policy:project-foundation
 - Exception: yes
+- Enforced by: ci,review
+- Evidence: judgment: PR의 신규 파일·폴더 책임 경계와 생성 이유
 - Rule: 새 파일이나 폴더는 독립 책임, 재사용 경계, 테스트 경계 중 하나가 설명될 때만 생성한다.
 
 ### PF-FILE-002 — 추상화 시점
@@ -154,6 +188,8 @@
 - Profiles: core
 - Authority: policy:project-foundation
 - Exception: yes
+- Enforced by: review
+- Evidence: judgment: 두 번째 사용처 또는 독립 변경 축
 - Rule: 공통화는 실제 두 번째 사용처가 존재하거나 확정된 독립 변경 축이 확인된 경우에만 수행한다.
 
 ## TypeScript
@@ -164,6 +200,8 @@
 - Profiles: typescript
 - Authority: typescript-strict
 - Exception: yes
+- Enforced by: review
+- Evidence: judgment: 타입 정의 검색과 개념 소유 모듈
 - Rule: 타입은 해당 개념을 소유하는 모듈에서 한 번만 정의하고 소비자는 복제하지 않고 가져다 사용한다.
 
 ### PF-TYPE-002 — 런타임 스키마
@@ -172,6 +210,8 @@
 - Profiles: typescript
 - Authority: policy:project-foundation
 - Exception: yes
+- Enforced by: review
+- Evidence: judgment: 스키마와 타입의 단일 소유 관계
 - Rule: 런타임 검증 스키마가 존재하면 동일 구조를 수동 타입으로 다시 쓰지 말고 타입을 스키마에서 파생한다.
 
 ### PF-TYPE-003 — strict와 any
@@ -180,6 +220,8 @@
 - Profiles: typescript
 - Authority: typescript-strict
 - Exception: yes
+- Enforced by: validator,ci
+- Evidence: tsconfig strict 검사와 typecheck 결과
 - Rule: TypeScript strict 모드를 사용하고 any는 경계가 문서화된 최소 범위의 승인된 예외에서만 허용한다.
 
 ## SCSS
@@ -190,6 +232,8 @@
 - Profiles: scss
 - Authority: policy:project-foundation
 - Exception: yes
+- Enforced by: review
+- Evidence: judgment: 기존 SCSS 자산 검색 결과와 재사용 판단
 - Rule: 새 값이나 Mixin을 만들기 전에 기존 토큰, 변수, 함수와 Mixin을 검색하고 의미가 일치하면 재사용한다.
 
 ### PF-SCSS-002 — Sass module system
@@ -198,6 +242,8 @@
 - Profiles: scss
 - Authority: sass-use
 - Exception: yes
+- Enforced by: validator,ci
+- Evidence: SCSS 정적 검사와 Sass 빌드 결과
 - Rule: SCSS 모듈은 전역 import 대신 Sass의 use와 forward 규칙으로 명시적인 네임스페이스와 공개 표면을 구성한다.
 
 ### PF-SCSS-003 — 신규 토큰 조건
@@ -206,6 +252,8 @@
 - Profiles: scss
 - Authority: sass-mixin
 - Exception: yes
+- Enforced by: review
+- Evidence: judgment: 토큰·Mixin의 이름, 소유권과 소비 지점
 - Rule: 신규 토큰이나 Mixin은 기존 의미와 구분되는 이름과 둘 이상의 예상 소비 지점 또는 명확한 도메인 소유권을 가져야 한다.
 
 ## Dependencies and versions
@@ -213,25 +261,31 @@
 ### PF-DEP-001 — 잠금 파일
 
 - Level: MUST
-- Profiles: typescript
+- Profiles: node
 - Authority: npm-ci
 - Exception: yes
+- Enforced by: validator,ci
+- Evidence: 단일 lockfile과 package-lock root 일치 검사
 - Rule: 프로젝트는 하나의 패키지 관리자와 하나의 잠금 파일을 사용하고 자동화 환경은 잠금 파일을 변경하지 않는 재현 가능한 설치 명령을 사용한다.
 
 ### PF-DEP-002 — 의존성 도입
 
 - Level: MUST
-- Profiles: core,typescript
+- Profiles: core,node,custom
 - Authority: policy:project-foundation
 - Exception: yes
+- Enforced by: ci,review
+- Evidence: judgment: PR의 목적·대안·라이선스·보안·비용 기록
 - Rule: 신규 의존성은 목적, 표준 기능 대안, 라이선스, 보안, 유지보수 상태와 빌드 및 배포 비용을 검토한 뒤 추가한다.
 
 ### PF-DEP-003 — 고정과 자동 갱신
 
 - Level: MUST
-- Profiles: core,docker
+- Profiles: core,github,docker
 - Authority: github-dependabot
 - Exception: yes
+- Enforced by: validator,ci,github
+- Evidence: lockfile·이미지 digest·Action SHA와 Dependabot 설정
 - Rule: 잠긴 패키지, 컨테이너 이미지와 자동화 Action은 재현 가능한 참조를 사용하고 갱신은 검증을 거치는 pull request로 수행한다.
 
 ## Docker and performance
@@ -242,6 +296,8 @@
 - Profiles: docker
 - Authority: docker-build-best-practices
 - Exception: yes
+- Enforced by: validator,ci
+- Evidence: Docker target·production 산출물·Build Check 결과
 - Rule: 컨테이너 빌드는 의존성, 빌드, 테스트와 production 단계를 분리하고 최종 이미지에는 실행에 필요한 산출물만 포함한다.
 
 ### PF-DOCKER-002 — Compose 표준
@@ -250,6 +306,8 @@
 - Profiles: docker
 - Authority: docker-compose-model
 - Exception: yes
+- Enforced by: validator,ci
+- Evidence: Compose 파일명·version 필드·config 검사
 - Rule: 기본 Compose 파일명은 compose.yaml을 사용하고 obsolete version 필드와 동시에 존재하는 호환 파일을 허용하지 않는다.
 
 ### PF-DOCKER-003 — 이미지 재현성
@@ -258,6 +316,8 @@
 - Profiles: docker
 - Authority: docker-build-best-practices
 - Exception: yes
+- Enforced by: validator,ci
+- Evidence: 모든 외부 base image의 태그와 digest 검사
 - Rule: 외부 컨테이너 이미지는 의미 있는 버전 태그와 immutable SHA-256 digest를 함께 사용한다.
 
 ### PF-DOCKER-004 — 개발 동기화
@@ -266,6 +326,8 @@
 - Profiles: docker
 - Authority: docker-compose-watch
 - Exception: yes
+- Enforced by: validator,ci
+- Evidence: Compose Watch 경로와 node_modules 제외 검사
 - Rule: 컨테이너 개발 동기화는 host node_modules를 공유하지 않고 변경 종류에 맞는 sync 또는 rebuild 동작을 사용한다.
 
 ### PF-PERF-001 — 측정 기반 최적화
@@ -274,6 +336,8 @@
 - Profiles: core,docker
 - Authority: policy:project-foundation
 - Exception: yes
+- Enforced by: review
+- Evidence: judgment: PROJECT.md 예산과 변경 전후 측정값
 - Rule: 최적화는 PROJECT.md에 정의한 이미지 크기, 빌드 시간, 시작 시간 또는 번들 비용의 측정값과 회귀 기준을 근거로 수행한다.
 
 ### PF-PERF-002 — 빌드 캐시
@@ -282,6 +346,8 @@
 - Profiles: docker
 - Authority: docker-cache-optimization
 - Exception: yes
+- Enforced by: validator,ci
+- Evidence: Dockerfile cache mount와 CI cache 설정
 - Rule: 변경 빈도가 낮은 의존성 입력을 소스보다 먼저 처리하고 BuildKit cache mount와 CI 외부 캐시를 사용한다.
 
 ## Verification
@@ -292,6 +358,8 @@
 - Profiles: core
 - Authority: policy:project-foundation
 - Exception: yes
+- Enforced by: hook,ci
+- Evidence: verify 결과와 관련 테스트·롤백 검토
 - Rule: 변경은 가장 작은 관련 테스트부터 실행하고 배포 또는 공개 인터페이스 변경은 전체 strict 검증과 롤백 가능성을 확인한다.
 
 ### PF-TEST-002 — 검증 증거
@@ -300,6 +368,8 @@
 - Profiles: core
 - Authority: github-actions-security
 - Exception: no
+- Enforced by: ci,github
+- Evidence: PR 검증·생략·남은 위험 섹션과 release 기록
 - Rule: pull request와 릴리스 기록에는 실제 실행한 검증, 결과, 생략한 검사와 남은 위험을 사실대로 남긴다.
 
 ## 예외 형식

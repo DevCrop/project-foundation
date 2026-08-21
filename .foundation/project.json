@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "name": "project-foundation",
+    "runtime": "node"
+  },
+  "commands": {
+    "install": {
+      "command": "npm",
+      "args": ["ci"]
+    },
+    "test": {
+      "command": "npm",
+      "args": ["test"]
+    },
+    "typecheck": {
+      "command": "npm",
+      "args": ["run", "typecheck"]
+    },
+    "build": {
+      "command": "npm",
+      "args": ["run", "build"]
+    },
+    "start": {
+      "command": "npm",
+      "args": ["start"]
+    },
+    "dependencyAudit": {
+      "command": "npm",
+      "args": ["audit", "--audit-level=moderate"]
+    }
+  },
+  "docker": {
+    "enabled": true,
+    "file": "Dockerfile",
+    "service": "app",
+    "port": 3000,
+    "targets": {
+      "development": "development",
+      "test": "test",
+      "production": "production"
+    }
+  },
+  "github": {
+    "visibility": "preserve",
+    "defaultBranch": "main"
+  }
+}

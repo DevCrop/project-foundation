@@ -3,4 +3,4 @@ description: Project Foundation 공통 규칙과 현재 프로젝트 결정을 �
 alwaysApply: true
 ---
 
-작업 전 `FOUNDATION.md`와 `PROJECT.md`를 읽는다. 공통 규칙의 원문은 `FOUNDATION.md`, 프로젝트별 명령·아키텍처·예외·성능 예산은 `PROJECT.md`가 소유한다. 구조 변경 전 `.agents/skills/architecture-selection/SKILL.md`를 사용한다.
+작업 전 @FOUNDATION.md 와 @PROJECT.md 를 읽는다. 공통 규칙 본문은 참조 파일이 소유한다. 구조 변경에는 `.agents/skills/architecture-selection/SKILL.md`, 일반 구현 변경에는 `.agents/skills/change-workflow/SKILL.md`를 사용한다.

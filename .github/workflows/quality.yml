@@ -13,10 +13,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
-    name: quality (Node ${{ matrix.node }})
+  foundation-policy:
+    name: foundation-policy
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+      - name: Setup Foundation Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24.19.0"
+      - name: Verify policy and PR evidence
+        run: node scripts/foundation.mjs verify --scope policy --base "origin/${{ github.base_ref || 'main' }}"
+
+  project-quality:
+    name: project-quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Setup Foundation Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - name: Run project install adapter
+        run: node scripts/foundation.mjs run install --if-configured
+      - name: Run configured project checks
+        run: node scripts/foundation.mjs verify --scope project
+
+  compatibility:
+    name: compatibility (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -31,41 +64,25 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
-      - name: Test
+      - name: Test CLI compatibility
         run: npm test
-      - name: Build
-        if: ${{ hashFiles('tsconfig.json') != '' }}
-        run: npm run build
-      - name: Build styles
-        if: ${{ hashFiles('styles/main.scss') != '' }}
-        run: npm run styles:build
-      - name: Strict validation
-        run: node scripts/foundation.mjs validate --strict
-      - name: Diff whitespace
-        run: git diff --check
 
   container:
     name: container
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-      - name: Setup Buildx
-        if: ${{ hashFiles('Dockerfile') != '' }}
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
-      - name: Dockerfile checks
-        if: ${{ hashFiles('Dockerfile') != '' }}
-        run: docker buildx build --check .
-      - name: Compose validation
-        if: ${{ hashFiles('compose.yaml') != '' }}
-        run: docker compose config -q
-      - name: Production image build
-        if: ${{ hashFiles('Dockerfile') != '' }}
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+      - name: Setup Foundation Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          context: .
-          target: production
-          push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          node-version: "24.19.0"
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Build Custom adapter fixture
+        env:
+          FOUNDATION_DOCKER_TESTS: "1"
+        run: npm test
+      - name: Verify configured container contract
+        run: node scripts/foundation.mjs container verify

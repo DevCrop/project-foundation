@@ -4,7 +4,8 @@
 
 - Project: project-foundation
 - Foundation version: 1.0.0
-- Active profiles: core, typescript, scss, docker
+- Runtime adapter: node
+- Active profiles: core, github, docker, node, typescript, scss
 - Owner: @DevCrop
 
 ## Commands
@@ -20,6 +21,7 @@ node scripts/foundation.mjs validate --strict
 ## Architecture
 
 Foundation은 규칙 문서, 의존성 없는 단일 Node CLI, 프로젝트가 소유하는 seed 파일로 구성한다. 애플리케이션 프레임워크나 고정 디자인 패턴을 기본값으로 선택하지 않는다.
+소비 애플리케이션은 Node 완성형 어댑터 또는 기존 명령·Dockerfile을 연결하는 Custom 어댑터를 선택한다.
 
 ## Type Ownership
 
@@ -31,6 +33,7 @@ SCSS 공개 토큰과 Mixin은 각각 소유 모듈에서 정의하고 `styles/m
 
 ## Docker
 
+- Runtime contract: `.foundation/project.json`
 - Application port: 3000
 - Production output: `dist/`
 - Build command: `npm run build`

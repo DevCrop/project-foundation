@@ -23,17 +23,16 @@ validate:
 	node scripts/foundation.mjs validate --strict
 
 test:
-	npm test
+	node scripts/foundation.mjs run test
 
 build:
-	npm run build
-	npm run styles:build
+	node scripts/foundation.mjs run build
 
 image:
-	docker build --target production -t $${COMPOSE_PROJECT_NAME:-project-foundation}:local .
+	node scripts/foundation.mjs container image
 
 config:
-	docker compose config -q
+	node scripts/foundation.mjs container config
 
 up:
 	docker compose up --build
@@ -51,4 +50,4 @@ ps:
 	docker compose ps
 
 release-check:
-	npm run release:check
+	node scripts/foundation.mjs verify --base origin/main
