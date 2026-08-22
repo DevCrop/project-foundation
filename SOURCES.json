@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-21",
+  "verifiedAt": "2026-08-22",
   "allowedDomains": [
     "code.claude.com",
     "cursor.com",
@@ -8,19 +8,29 @@
     "docs.docker.com",
     "docs.github.com",
     "docs.npmjs.com",
+    "getcomposer.org",
     "git-scm.com",
+    "github.com",
+    "html.spec.whatwg.org",
     "learn.chatgpt.com",
+    "nginx.org",
     "nodejs.org",
     "sass-lang.com",
     "semver.org",
+    "symfony.com",
+    "threejs.org",
+    "vite.dev",
     "www.gnu.org",
+    "www.php-fig.org",
+    "www.php.net",
+    "www.w3.org",
     "www.typescriptlang.org"
   ],
   "sources": [
     {
       "id": "codex-agents-md",
       "provider": "OpenAI",
-      "url": "https://developers.openai.com/codex/guides/agents-md",
+      "url": "https://learn.chatgpt.com/docs/agent-configuration/agents-md",
       "verifiedAt": "2026-08-21",
       "reviewIntervalDays": 31,
       "covers": ["AGENTS.md discovery", "instruction precedence", "size limits"]
@@ -240,6 +250,182 @@
       "verifiedAt": "2026-08-21",
       "reviewIntervalDays": 31,
       "covers": ["line endings", "working tree encoding"]
+    },
+    {
+      "id": "php-supported-versions",
+      "provider": "PHP",
+      "url": "https://www.php.net/supported-versions.php",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["active support", "security support", "end of life"]
+    },
+    {
+      "id": "php-releases",
+      "provider": "PHP",
+      "url": "https://www.php.net/releases/index.php",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["PHP 8.4 patch", "PHP 8.5 patch", "release checksums"]
+    },
+    {
+      "id": "composer-download",
+      "provider": "Composer",
+      "url": "https://getcomposer.org/download/",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["latest stable", "maintenance policy", "installer checksum"]
+    },
+    {
+      "id": "composer-schema",
+      "provider": "Composer",
+      "url": "https://getcomposer.org/doc/04-schema.md",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["composer.json", "PSR-4", "platform requirements", "lock ownership"]
+    },
+    {
+      "id": "composer-autoload",
+      "provider": "Composer",
+      "url": "https://getcomposer.org/doc/articles/autoloader-optimization.md",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["production autoloader optimization"]
+    },
+    {
+      "id": "composer-runtime",
+      "provider": "Composer",
+      "url": "https://getcomposer.org/doc/07-runtime.md",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["platform check", "installed versions"]
+    },
+    {
+      "id": "php-fig-per",
+      "provider": "PHP-FIG",
+      "url": "https://www.php-fig.org/per/coding-style/",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["PER Coding Style 3.0"]
+    },
+    {
+      "id": "symfony-http-foundation",
+      "provider": "Symfony",
+      "url": "https://symfony.com/doc/current/components/http_foundation.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["standalone Request", "Response", "Composer autoload"]
+    },
+    {
+      "id": "symfony-routing",
+      "provider": "Symfony",
+      "url": "https://symfony.com/doc/current/routing.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["route collection", "URL matching"]
+    },
+    {
+      "id": "php-pdo-prepare",
+      "provider": "PHP",
+      "url": "https://www.php.net/manual/en/pdo.prepare.php",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["prepared statements", "parameter binding"]
+    },
+    {
+      "id": "php-session-security",
+      "provider": "PHP",
+      "url": "https://www.php.net/manual/en/features.session.security.management.php",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["session ID regeneration", "cookie security", "CSRF"]
+    },
+    {
+      "id": "php-htmlspecialchars",
+      "provider": "PHP",
+      "url": "https://www.php.net/manual/en/function.htmlspecialchars.php",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["HTML output encoding"]
+    },
+    {
+      "id": "vite-backend-integration",
+      "provider": "Vite",
+      "url": "https://vite.dev/guide/backend-integration.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["backend rendered HTML", "development origin", "build manifest"]
+    },
+    {
+      "id": "html-sections",
+      "provider": "WHATWG",
+      "url": "https://html.spec.whatwg.org/multipage/sections.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["section", "article", "heading", "header"]
+    },
+    {
+      "id": "wcag22",
+      "provider": "W3C",
+      "url": "https://www.w3.org/WAI/WCAG22/quickref/",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["WCAG 2.2", "keyboard", "reduced motion", "content structure"]
+    },
+    {
+      "id": "three-cleanup",
+      "provider": "Three.js",
+      "url": "https://threejs.org/manual/en/cleanup.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["dispose", "resource tracking"]
+    },
+    {
+      "id": "three-loaders",
+      "provider": "Three.js",
+      "url": "https://threejs.org/docs/",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["KTX2Loader", "DRACOLoader"]
+    },
+    {
+      "id": "nginx-fastcgi",
+      "provider": "Nginx",
+      "url": "https://nginx.org/en/docs/http/ngx_http_fastcgi_module.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["FastCGI", "PHP-FPM upstream", "script filename"]
+    },
+    {
+      "id": "github-action-checkout",
+      "provider": "GitHub",
+      "url": "https://github.com/actions/checkout/releases",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["checkout release", "immutable commit SHA"]
+    },
+    {
+      "id": "github-action-setup-node",
+      "provider": "GitHub",
+      "url": "https://github.com/actions/setup-node/releases",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["Node setup release", "npm cache behavior", "immutable commit SHA"]
+    },
+    {
+      "id": "github-action-setup-buildx",
+      "provider": "Docker",
+      "url": "https://github.com/docker/setup-buildx-action/releases",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["Buildx setup release", "immutable commit SHA"]
+    },
+    {
+      "id": "github-action-dependency-review",
+      "provider": "GitHub",
+      "url": "https://github.com/actions/dependency-review-action/releases",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["dependency review release", "repository eligibility", "immutable commit SHA"]
     }
   ]
 }

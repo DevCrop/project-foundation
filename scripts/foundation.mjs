@@ -26,16 +26,25 @@ import { gunzipSync } from "node:zlib";
 const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FOUNDATION_VERSION = "1.0.0";
 const OFFICIAL_UPSTREAM = "https://github.com/DevCrop/project-foundation";
-const VALID_RUNTIMES = new Set(["node", "custom"]);
-const VALID_PROFILES = new Set(["core", "github", "docker", "node", "typescript", "scss", "custom"]);
+const VALID_RUNTIMES = new Set(["php"]);
+const VALID_PROFILES = new Set(["core", "php", "web", "assets", "typescript", "scss", "docker", "github"]);
 const CORE_MANAGED_PATHS = [
   ".agents/skills/architecture-selection/SKILL.md",
   ".agents/skills/change-workflow/SKILL.md",
+  ".agents/skills/site-starter/SKILL.md",
   ".claude/skills/architecture-selection/SKILL.md",
   ".claude/skills/change-workflow/SKILL.md",
+  ".claude/skills/site-starter/SKILL.md",
   ".codex/hooks.json",
   ".cursor/rules/project.mdc",
   ".editorconfig",
+  ".foundation/capabilities.json",
+  ".foundation/recipes/assets-experience.json",
+  ".foundation/recipes/backend-data.json",
+  ".foundation/recipes/integrations.json",
+  ".foundation/recipes/operations-governance.json",
+  ".foundation/recipes/web-core.json",
+  ".foundation/scenarios.json",
   ".foundation/toolchain.json",
   ".gitattributes",
   "AGENTS.md",
@@ -55,10 +64,37 @@ const GITHUB_MANAGED_PATHS = [
 const MANAGED_PATHS = [...CORE_MANAGED_PATHS, ...GITHUB_MANAGED_PATHS];
 const PROFILE_PATHS = {
   github: [".github/CODEOWNERS"],
-  node: ["package.json", "package-lock.json", "src/main.js"],
-  typescript: ["tsconfig.json", "src/main.ts"],
-  scss: ["styles/_tokens.scss", "styles/_mixins.scss", "styles/main.scss"],
-  docker: ["Dockerfile", "compose.yaml", ".dockerignore", ".env.example", "Makefile"],
+  php: [
+    "composer.json",
+    "composer.lock",
+    "bootstrap/app.php",
+    "config/pages.php",
+    "public/index.php",
+    "src/Web/AssetManifest.php",
+    "src/Web/PageController.php",
+    "src/Web/ViewRenderer.php",
+    "resource/views/layouts/default.php",
+    "resource/views/pages/home.php",
+    "tests/Web/PageControllerTest.php",
+  ],
+  assets: ["package.json", "package-lock.json", "vite.config.ts"],
+  typescript: ["tsconfig.json", "resource/ts/main.ts"],
+  scss: [
+    "resource/scss/main.scss",
+    "resource/scss/abstract/_tokens.scss",
+    "resource/scss/base/_document.scss",
+    "resource/scss/components/_card.scss",
+    "resource/scss/layouts/_section.scss",
+  ],
+  docker: [
+    "Dockerfile",
+    "compose.yaml",
+    "docker/nginx/default.conf",
+    "docker/php/conf.d/app.ini",
+    ".dockerignore",
+    ".env.example",
+    "Makefile",
+  ],
 };
 const REQUIRED_CHECKS = ["foundation-policy", "project-quality", "container", "dependency-gate"];
 const BRANCH_PATTERN = /^(feature|fix|security|docs|refactor|test|chore|release)\/[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
@@ -82,6 +118,7 @@ const TEXT_EXTENSIONS = new Set([
   ".md",
   ".mdc",
   ".mjs",
+  ".php",
   ".scss",
   ".ts",
   ".txt",
@@ -96,6 +133,7 @@ const IGNORED_DIRECTORIES = new Set([
   "coverage",
   "dist",
   "node_modules",
+  "vendor",
   "tmp",
 ]);
 const MAX_ARCHIVE_BYTES = 10 * 1024 * 1024;
@@ -251,12 +289,12 @@ function parseArguments(argv) {
 }
 
 function parseRuntime(value) {
-  const runtime = String(value ?? "node").trim().toLowerCase();
+  const runtime = String(value ?? "php").trim().toLowerCase();
   if (!VALID_RUNTIMES.has(runtime)) throw new FoundationError(`Unknown runtime: ${runtime}`);
   return runtime;
 }
 
-function parseProfiles(value, runtime = "node") {
+function parseProfiles(value, runtime = "php") {
   const selectedRuntime = parseRuntime(runtime);
   const requested = String(value ?? "core")
     .split(",")
@@ -265,11 +303,10 @@ function parseProfiles(value, runtime = "node") {
   const profiles = [...new Set(["core", selectedRuntime, ...requested])];
   const invalid = profiles.filter((profile) => !VALID_PROFILES.has(profile));
   if (invalid.length) throw new FoundationError(`Unknown profiles: ${invalid.join(", ")}`);
-  if (profiles.includes("node") && profiles.includes("custom")) throw new FoundationError("Choose exactly one runtime: node or custom.");
-  if (selectedRuntime !== "node" && (profiles.includes("typescript") || profiles.includes("scss"))) {
-    throw new FoundationError("The typescript and scss profiles require the node runtime in v1.");
-  }
-  return profiles;
+  if (profiles.includes("typescript") || profiles.includes("scss")) profiles.push("assets");
+  if (profiles.includes("assets") && !profiles.includes("web")) profiles.push("web");
+  if (!profiles.includes("web")) profiles.push("web");
+  return [...new Set(profiles)];
 }
 
 function parseRules(markdown) {
@@ -284,6 +321,9 @@ function parseRules(markdown) {
       level: field("Level"),
       profiles: field("Profiles")?.split(",").map((item) => item.trim()) ?? [],
       authority: field("Authority"),
+      trigger: field("Trigger"),
+      action: field("Do"),
+      forbidden: field("Don't"),
       exception: field("Exception"),
       enforcedBy: field("Enforced by")?.split(",").map((item) => item.trim()) ?? [],
       evidence: field("Evidence"),
@@ -337,14 +377,33 @@ function validateCommandSpecification(name, specification, errors) {
 }
 
 function validateProjectConfiguration(configuration, errors) {
-  if (configuration.schemaVersion !== 1) errors.push("project.json: unsupported schemaVersion");
+  if (configuration.schemaVersion !== 2) errors.push("project.json: unsupported schemaVersion");
   const runtime = configuration.project?.runtime;
-  if (!VALID_RUNTIMES.has(runtime)) errors.push("project.json: project.runtime must be node or custom");
+  if (!VALID_RUNTIMES.has(runtime)) errors.push("project.json: project.runtime must be php");
   if (typeof configuration.project?.name !== "string" || !/^[a-z0-9][a-z0-9._-]{0,213}$/.test(configuration.project.name)) {
     errors.push("project.json: project.name is invalid");
   }
   for (const [name, specification] of Object.entries(configuration.commands ?? {})) {
     validateCommandSpecification(name, specification, errors);
+  }
+  if (!configuration.intake || !["incomplete", "baseline-ready", "approved"].includes(configuration.intake.state)) {
+    errors.push("project.json: intake.state must be incomplete, baseline-ready, or approved");
+  }
+  for (const key of ["observed", "inferred", "unverified"]) {
+    if (!Array.isArray(configuration.intake?.[key]) || configuration.intake[key].some((item) => typeof item !== "string" || !item.trim())) {
+      errors.push(`project.json: intake.${key} must be a non-empty string array`);
+    }
+  }
+  if (configuration.pages?.source !== "config/pages.php") errors.push("project.json: pages.source must be config/pages.php");
+  if (!Array.isArray(configuration.capabilities?.active)) errors.push("project.json: capabilities.active must be an array");
+  if (configuration.assets?.enabled) {
+    try {
+      normalizeRelative(configuration.assets.manifest);
+      for (const entry of configuration.assets.entries ?? []) normalizeRelative(entry);
+    } catch (error) {
+      errors.push(`project.json: assets path is unsafe (${error.message})`);
+    }
+    if (!Array.isArray(configuration.assets.entries) || configuration.assets.entries.length === 0) errors.push("project.json: enabled assets require at least one entry");
   }
   if (configuration.docker?.enabled) {
     for (const field of ["file", "service"]) {
@@ -402,12 +461,14 @@ function validateDockerfile(dockerfile, configuration, toolchain, errors) {
     if (!image || !/:[^@\s]+@sha256:[a-f0-9]{64}$/i.test(image)) errors.push(`Dockerfile: ${match[1]} must pin a base image tag and digest`);
   }
   if (!/^HEALTHCHECK\s+/im.test(dockerfile)) errors.push("Dockerfile: a runtime HEALTHCHECK is required");
-  if (configuration.project.runtime === "node") {
-    if (!/^ARG NODE_IMAGE=[^\s:]+:[^\s@]+@sha256:[a-f0-9]{64}$/m.test(dockerfile)) {
-      errors.push("Dockerfile: NODE_IMAGE must include a version tag and SHA-256 digest");
+  if (configuration.project.runtime === "php") {
+    if (!/^ARG PHP_IMAGE=[^\s:]+:[^\s@]+@sha256:[a-f0-9]{64}$/m.test(dockerfile)) {
+      errors.push("Dockerfile: PHP_IMAGE must include a version tag and SHA-256 digest");
     }
-    if (!dockerfile.includes(toolchain.docker.baseImage)) errors.push("Dockerfile: base image does not match toolchain.json");
+    if (!dockerfile.includes(toolchain.docker.images.phpFpm)) errors.push("Dockerfile: PHP base image does not match toolchain.json");
+    if (!dockerfile.includes(toolchain.docker.images.composer)) errors.push("Dockerfile: Composer image does not match toolchain.json");
     if (!dockerfile.includes(toolchain.docker.dockerfileFrontend)) errors.push("Dockerfile: frontend does not match toolchain.json");
+    if (!dockerfile.includes(`ARG NPM_VERSION=${toolchain.npm.default}`)) errors.push("Dockerfile: npm version does not match toolchain.json");
   }
 }
 
@@ -422,7 +483,10 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
     "CLAUDE.md",
     "PROJECT.md",
     "SECURITY.md",
+    "ARCHITECTURE.md",
     ".foundation/manifest.json",
+    ".foundation/capabilities.json",
+    ".foundation/evidence.json",
     ".foundation/project.json",
     ".foundation/toolchain.json",
     "scripts/foundation.mjs",
@@ -464,6 +528,9 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
     if (!rule.level || !["MUST", "SHOULD", "MAY"].includes(rule.level)) errors.push(`${rule.id}: invalid Level`);
     if (!rule.profiles.length || rule.profiles.some((profile) => !VALID_PROFILES.has(profile))) errors.push(`${rule.id}: invalid Profiles`);
     if (!rule.authority) errors.push(`${rule.id}: missing Authority`);
+    if (!rule.trigger) errors.push(`${rule.id}: missing Trigger`);
+    if (!rule.action) errors.push(`${rule.id}: missing Do`);
+    if (!rule.forbidden) errors.push(`${rule.id}: missing Don't`);
     if (!rule.body) errors.push(`${rule.id}: missing Rule body`);
     if (!rule.exception || !["yes", "no"].includes(rule.exception)) errors.push(`${rule.id}: invalid Exception`);
     if (!rule.enforcedBy.length || rule.enforcedBy.some((method) => !["validator", "hook", "ci", "github", "review"].includes(method))) {
@@ -518,6 +585,7 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
     ".cursor/rules/project.mdc",
     ".claude/skills/architecture-selection/SKILL.md",
     ".claude/skills/change-workflow/SKILL.md",
+    ".claude/skills/site-starter/SKILL.md",
   ];
   for (const adapter of adapters) {
     if (!(await exists(resolveInside(root, adapter)))) continue;
@@ -556,7 +624,75 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
     validateProjectConfiguration(projectConfiguration, errors);
   } catch (error) {
     errors.push(error.message, ...(error.details ?? []));
-    projectConfiguration = { project: { runtime: "custom" }, commands: {}, docker: { enabled: false }, github: { visibility: "preserve" } };
+    projectConfiguration = { project: { runtime: "php" }, commands: {}, docker: { enabled: false }, github: { visibility: "preserve" } };
+  }
+
+  let capabilityCatalog = { capabilities: [] };
+  try {
+    capabilityCatalog = await readJson(resolveInside(root, ".foundation/capabilities.json"));
+    const capabilityIds = new Set();
+    const recipeIds = new Set();
+    for (const recipeFile of files.filter((entry) => entry.path.startsWith(".foundation/recipes/") && entry.path.endsWith(".json"))) {
+      const recipe = await readJson(resolveInside(root, recipeFile.path));
+      if (!recipe.id || recipeIds.has(recipe.id)) errors.push(`${recipeFile.path}: duplicate or missing recipe ID`);
+      recipeIds.add(recipe.id);
+    }
+    for (const capability of capabilityCatalog.capabilities ?? []) {
+      if (!capability.id || capabilityIds.has(capability.id)) errors.push(`capabilities.json: duplicate or missing capability ID ${capability.id ?? "<missing>"}`);
+      capabilityIds.add(capability.id);
+      if (!recipeIds.has(capability.recipe)) errors.push(`capabilities.json: ${capability.id} references unknown recipe ${capability.recipe}`);
+      for (const ruleId of capability.securityRules ?? []) {
+        if (!ruleIds.has(ruleId)) errors.push(`capabilities.json: ${capability.id} references unknown rule ${ruleId}`);
+      }
+    }
+    for (const capability of capabilityCatalog.capabilities ?? []) {
+      for (const relation of [...(capability.requires ?? []), ...(capability.conflicts ?? [])]) {
+        if (!capabilityIds.has(relation)) errors.push(`capabilities.json: ${capability.id} references unknown capability ${relation}`);
+      }
+    }
+    const activeCapabilities = new Set(projectConfiguration.capabilities?.active ?? []);
+    for (const capabilityId of activeCapabilities) {
+      const capability = (capabilityCatalog.capabilities ?? []).find((item) => item.id === capabilityId);
+      if (!capability) {
+        errors.push(`project.json: unknown active capability ${capabilityId}`);
+        continue;
+      }
+      for (const requirement of capability.requires ?? []) {
+        if (!activeCapabilities.has(requirement)) errors.push(`project.json: ${capabilityId} requires active capability ${requirement}`);
+      }
+      for (const conflict of capability.conflicts ?? []) {
+        if (activeCapabilities.has(conflict)) errors.push(`project.json: ${capabilityId} conflicts with ${conflict}`);
+      }
+    }
+  } catch (error) {
+    errors.push(error.message, ...(error.details ?? []));
+  }
+
+  try {
+    const scenarios = await readJson(resolveInside(root, ".foundation/scenarios.json"));
+    const groups = scenarios.groups ?? [];
+    const cases = groups.flatMap((group) => group.cases ?? []);
+    if (scenarios.schemaVersion !== 1) errors.push("scenarios.json: unsupported schemaVersion");
+    if (scenarios.expectedCount !== 120 || cases.length !== 120) errors.push(`scenarios.json: expected exactly 120 cases, found ${cases.length}`);
+    if (groups.length !== 12 || groups.some((group) => !group.id || group.cases?.length !== 10)) errors.push("scenarios.json: expected 12 named groups with 10 cases each");
+    const scenarioIds = new Set();
+    for (const scenario of cases) {
+      if (!/^PF-SC-\d{3}$/.test(scenario.id ?? "") || scenarioIds.has(scenario.id)) errors.push(`scenarios.json: duplicate or invalid case ID ${scenario.id ?? "<missing>"}`);
+      scenarioIds.add(scenario.id);
+      if (!scenario.title || !scenario.probe?.type) errors.push(`scenarios.json: ${scenario.id} is missing title or executable probe`);
+      if (!Array.isArray(scenario.ruleIds) || !scenario.ruleIds.length) errors.push(`scenarios.json: ${scenario.id} has no rule references`);
+      for (const ruleId of scenario.ruleIds ?? []) if (!ruleIds.has(ruleId)) errors.push(`scenarios.json: ${scenario.id} references unknown rule ${ruleId}`);
+    }
+    for (let index = 1; index <= 120; index += 1) {
+      const expectedId = `PF-SC-${String(index).padStart(3, "0")}`;
+      if (!scenarioIds.has(expectedId)) errors.push(`scenarios.json: missing canonical case ${expectedId}`);
+    }
+  } catch (error) {
+    errors.push(error.message, ...(error.details ?? []));
+  }
+
+  if (projectConfiguration.intake?.state === "approved" && projectConfiguration.intake.unverified?.length) {
+    errors.push("project.json: approved intake cannot retain Unverified items");
   }
 
   const lockfiles = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"].filter((name) =>
@@ -576,6 +712,25 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
       }
     } catch (error) {
       errors.push(error.message, ...(error.details ?? []));
+    }
+  }
+
+  const composerPath = resolveInside(root, "composer.json");
+  const composerLockPath = resolveInside(root, "composer.lock");
+  if (await exists(composerPath)) {
+    if (!(await exists(composerLockPath))) errors.push("composer.json requires committed composer.lock");
+    const composer = await readJson(composerPath);
+    if (composer.require?.php !== ">=8.4.23 <8.6") errors.push("composer.json: PHP constraint must match the supported Foundation range");
+    for (const dependency of ["symfony/http-foundation", "symfony/routing"]) {
+      if (!composer.require?.[dependency]) errors.push(`composer.json: missing required HTTP boundary dependency ${dependency}`);
+    }
+    if (await exists(composerLockPath)) {
+      const composerLock = await readJson(composerLockPath);
+      if (!/^[a-f0-9]{32}$/.test(composerLock["content-hash"] ?? "")) errors.push("composer.lock: invalid content-hash");
+      const lockedPackages = new Set([...(composerLock.packages ?? []), ...(composerLock["packages-dev"] ?? [])].map((item) => item.name));
+      for (const dependency of [...Object.keys(composer.require ?? {}).filter((name) => name !== "php"), ...Object.keys(composer["require-dev"] ?? {})]) {
+        if (!lockedPackages.has(dependency)) errors.push(`composer.lock: missing direct dependency ${dependency}`);
+      }
     }
   }
 
@@ -612,9 +767,9 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
 
   const toolchain = await readJson(resolveInside(root, ".foundation/toolchain.json"));
   let packageJson;
-  if (projectConfiguration.project.runtime === "node" || manifest.mode === "upstream") {
-    if (!(await exists(resolveInside(root, "package.json")))) errors.push("Node runtime is missing package.json");
-    if (!(await exists(resolveInside(root, "package-lock.json")))) errors.push("Node runtime is missing package-lock.json");
+  if (projectConfiguration.assets?.enabled || manifest.mode === "upstream") {
+    if (!(await exists(resolveInside(root, "package.json")))) errors.push("Assets profile is missing package.json");
+    if (!(await exists(resolveInside(root, "package-lock.json")))) errors.push("Assets profile is missing package-lock.json");
     if (await exists(resolveInside(root, "package.json"))) {
       packageJson = await readJson(resolveInside(root, "package.json"));
       if (packageJson.engines?.node !== toolchain.node.range) errors.push("package.json: engines.node does not match toolchain.json");
@@ -639,11 +794,12 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
   const activeProfiles = new Set(manifest.activeProfiles ?? []);
   if (!activeProfiles.has("core")) errors.push("manifest: core profile is required");
   if (!activeProfiles.has(projectConfiguration.project.runtime)) errors.push("manifest: runtime profile does not match project.json");
+  if (!activeProfiles.has("web")) errors.push("manifest: web profile is required for PHP sites");
+  if (projectConfiguration.assets?.enabled !== activeProfiles.has("assets")) errors.push("manifest: assets profile does not match project.json");
   if (projectConfiguration.docker.enabled !== activeProfiles.has("docker")) errors.push("manifest: docker profile does not match project.json");
-  for (const profile of ["github", "node", "typescript", "scss"]) {
+  for (const profile of ["github", "php", "assets", "typescript", "scss"]) {
     if (!activeProfiles.has(profile)) continue;
     for (const relativePath of PROFILE_PATHS[profile] ?? []) {
-      if (profile === "node" && relativePath === "src/main.js" && activeProfiles.has("typescript")) continue;
       if (!(await exists(resolveInside(root, relativePath)))) errors.push(`${profile} profile is missing ${relativePath}`);
     }
   }
@@ -656,9 +812,32 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
     }
   }
   if (activeProfiles.has("scss")) {
+    const scssEntries = files.filter((item) => !item.symlink && item.path.startsWith("resource/scss/") && item.path.endsWith(".scss") && !path.posix.basename(item.path).startsWith("_"));
+    for (const entry of scssEntries) {
+      if (entry.path !== "resource/scss/main.scss" && !/^resource\/scss\/pages\/[a-z0-9][a-z0-9-]*\.scss$/.test(entry.path)) {
+        errors.push(`${entry.path}: SCSS entry must be main.scss or an approved page entry`);
+      }
+    }
     for (const entry of files.filter((item) => !item.symlink && item.path.endsWith(".scss"))) {
       const source = await readFile(resolveInside(root, entry.path), "utf8");
       if (/^\s*@import\b/m.test(source)) errors.push(`${entry.path}: legacy Sass @import is forbidden; use @use or @forward`);
+    }
+    const mainScssPath = resolveInside(root, "resource/scss/main.scss");
+    if (await exists(mainScssPath)) {
+      const mainScss = await readFile(mainScssPath, "utf8");
+      const implementation = mainScss
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("//") && !/^@use\s+.+;$/.test(line));
+      if (implementation.length) errors.push("resource/scss/main.scss: main may only compose modules with @use");
+    }
+  }
+  if (activeProfiles.has("web")) {
+    for (const entry of files.filter((item) => !item.symlink && /^resource\/views\/pages\/.+\.php$/.test(item.path))) {
+      const source = await readFile(resolveInside(root, entry.path), "utf8");
+      for (const requiredClass of ["section", "container", "inner", "section-contents"]) {
+        if (!new RegExp(`class=["'][^"']*\\b${requiredClass}\\b`).test(source)) errors.push(`${entry.path}: canonical HTML shell is missing .${requiredClass}`);
+      }
     }
   }
   if (activeProfiles.has("docker")) {
@@ -715,6 +894,10 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
     for (const version of toolchain.node.supported) {
       if (!quality.includes(`"${version}"`)) errors.push(`quality.yml: missing supported Node ${version}`);
     }
+    for (const image of [toolchain.docker.images.phpFpm84, toolchain.docker.images.phpFpm]) {
+      if (!quality.includes(`"${image}"`)) errors.push(`quality.yml: missing supported PHP image ${image}`);
+    }
+    if (!/^  php-compatibility:/m.test(quality)) errors.push("quality.yml: missing PHP compatibility matrix");
     for (const check of REQUIRED_CHECKS.filter((name) => name !== "dependency-gate")) {
       if (!new RegExp(`^  ${check}:`, "m").test(quality) || !quality.includes(`name: ${check}`)) errors.push(`quality.yml: missing stable check ${check}`);
     }
@@ -739,7 +922,7 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
   const hooksPath = resolveInside(root, ".codex/hooks.json");
   if (await exists(hooksPath)) {
     const hooks = await readJson(hooksPath);
-    for (const event of ["SessionStart", "Stop"]) {
+    for (const event of ["SessionStart", "PreToolUse", "Stop"]) {
       const handlers = hooks.hooks?.[event]?.flatMap((group) => group.hooks ?? []) ?? [];
       if (!handlers.length) errors.push(`hooks.json: missing ${event}`);
       for (const handler of handlers) {
@@ -747,6 +930,18 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
       }
     }
   }
+
+  if (await exists(resolveInside(root, "ARCHITECTURE.md"))) {
+    try {
+      const expectedArchitecture = await architectureDocument(root);
+      const actualArchitecture = await readFile(resolveInside(root, "ARCHITECTURE.md"), "utf8");
+      if (actualArchitecture !== expectedArchitecture) errors.push("ARCHITECTURE.md is stale or manually edited; regenerate it with a Foundation command");
+    } catch (error) {
+      errors.push(`ARCHITECTURE.md: ${error.message}`);
+    }
+  }
+  const evidenceAudit = await auditEvidence(root);
+  errors.push(...evidenceAudit.errors);
 
   return { errors: [...new Set(errors)], warnings: [...new Set(warnings)], ruleCount: rules.length, sourceCount: sourceIds.size };
 }
@@ -778,13 +973,21 @@ function projectDocument(projectName, runtime, profiles) {
 - Active profiles: ${profiles.join(", ")}
 - Owner: project owner
 
+## Project Intake
+
+- Observed: PHP renders the site through the checked-in HTTP entry point.
+- Inferred: none
+- Unverified: page map, integrations, deployment target, content source, browser support, accessibility target, performance budgets
+
+Before project-specific structure is added, replace Unverified items with evidence or keep them explicitly unresolved.
+
 ## Commands
 
 Executable commands are owned by \`.foundation/project.json\`. Record command intent, exceptions, and operational notes here.
 
 ## Architecture
 
-No design pattern has been approved yet. Use the architecture-selection Skill before structural changes.
+The approved baseline is minimal PHP MVC at the HTTP presentation boundary: Symfony Request, Response, and Routing; one common PageController; pure PHP Views; and feature folders only after a capability is approved. Use the architecture-selection Skill before changing this boundary.
 
 ## Type Ownership
 
@@ -792,7 +995,7 @@ Record the module that owns each shared domain type. Do not create a global catc
 
 ## Styling
 
-Search existing tokens, variables, functions, and Mixins before adding new SCSS assets.
+The only global entry is \`resource/scss/main.scss\`. Search existing tokens, variables, functions, and Mixins before adding new SCSS assets. Add a page entry only when that page has independently loadable styling.
 
 ## Docker
 
@@ -814,7 +1017,7 @@ No active Foundation exceptions.
 function consumerReadme(projectName, runtime, profiles) {
   return `# ${projectName}
 
-This project uses Project Foundation ${FOUNDATION_VERSION}, the \`${runtime}\` runtime adapter, and these profiles: ${profiles.join(", ")}.
+This PHP site uses Project Foundation ${FOUNDATION_VERSION} and these profiles: ${profiles.join(", ")}.
 
 ## Setup
 
@@ -824,33 +1027,64 @@ node scripts/foundation.mjs validate --strict
 node scripts/foundation.mjs verify --base origin/main
 \`\`\`
 
-Project-specific decisions belong in [PROJECT.md](PROJECT.md). Shared rules are indexed in [FOUNDATION.md](FOUNDATION.md).
+Add a page with \`node scripts/foundation.mjs page add <slug> --path /path\`. Plan an optional feature with \`node scripts/foundation.mjs capability plan <id>\` before applying it.
+
+Project-specific decisions belong in [PROJECT.md](PROJECT.md). Machine settings belong in [project.json](.foundation/project.json). Shared rules are indexed in [FOUNDATION.md](FOUNDATION.md).
 `;
 }
 
 function projectConfiguration(projectName, runtime, profiles) {
-  const commands = runtime === "node"
-    ? {
-        install: { command: "npm", args: ["ci"] },
-        test: { command: "npm", args: ["test"] },
-        build: { command: "npm", args: ["run", "build"] },
-        start: { command: "npm", args: ["start"] },
-        dependencyAudit: { command: "npm", args: ["audit", "--audit-level=moderate"] },
-      }
-    : {};
-  if (runtime === "node" && profiles.includes("typescript")) commands.typecheck = { command: "npm", args: ["run", "typecheck"] };
+  const assetsEnabled = profiles.includes("assets");
+  const entries = [];
+  if (profiles.includes("typescript")) entries.push("resource/ts/main.ts");
+  if (profiles.includes("scss")) entries.push("resource/scss/main.scss");
+  const commands = {
+    install: { command: "composer", args: ["install", "--no-interaction"] },
+    lint: { command: "composer", args: ["lint"] },
+    typecheck: { command: "composer", args: ["analyse"] },
+    test: { command: "composer", args: ["test"] },
+    build: assetsEnabled
+      ? { command: "npm", args: ["run", "build"] }
+      : { command: "composer", args: ["dump-autoload", "--classmap-authoritative", "--no-interaction"] },
+    start: { command: "php", args: ["-S", "127.0.0.1:8080", "-t", "public"] },
+    dependencyAudit: { command: "composer", args: ["audit", "--locked"] },
+  };
+  if (assetsEnabled) {
+    commands.assetsInstall = { command: "npm", args: ["ci"] };
+    commands.assetAudit = { command: "npm", args: ["audit", "--audit-level=moderate"] };
+  }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     project: { name: projectName, runtime },
+    intake: {
+      state: "incomplete",
+      observed: ["PHP HTTP entry point is present"],
+      inferred: [],
+      unverified: ["page map", "integrations", "deployment target", "performance budgets"],
+    },
     commands,
+    pages: { source: "config/pages.php" },
+    capabilities: { active: ["publishing", "seo"] },
+    assets: {
+      enabled: assetsEnabled,
+      manifest: "public/build/.vite/manifest.json",
+      entries,
+    },
     docker: {
       enabled: profiles.includes("docker"),
       file: "Dockerfile",
-      service: "app",
-      port: 3000,
-      targets: { development: "development", test: "test", production: "production" },
+      service: "php",
+      port: 8080,
+      targets: { development: "php-development", test: "php-test", production: "php-production", web: "nginx-production" },
     },
     github: { visibility: "preserve", defaultBranch: "main" },
+    budgets: {
+      productionImageBytes: null,
+      coldBuildMs: null,
+      cachedBuildMs: null,
+      readinessMs: null,
+      frontend: {},
+    },
   };
 }
 
@@ -918,28 +1152,28 @@ async function copyFoundationFile(sourceRoot, targetRoot, relativePath) {
   await copyFile(source, target, fsConstants.COPYFILE_EXCL);
 }
 
-async function createNodeFiles(root, name, profiles) {
+async function createAssetFiles(root, name, profiles) {
   const packageJson = await readJson(resolveInside(SCRIPT_ROOT, "package.json"));
   packageJson.name = name;
   packageJson.version = "0.1.0";
   packageJson.private = true;
-  packageJson.scripts.test = "node --test";
-  const applicationBuild = profiles.includes("typescript")
-    ? "tsc -p tsconfig.json"
-    : "node -e \"require('node:fs').cpSync('src','dist',{recursive:true})\"";
-  packageJson.scripts.build = profiles.includes("scss") ? `${applicationBuild} && npm run styles:build` : applicationBuild;
+  packageJson.description = "Vite asset pipeline for a Project Foundation PHP site";
+  packageJson.scripts = {
+    build: "vite build",
+    dev: "vite",
+  };
   if (profiles.includes("typescript")) packageJson.scripts.typecheck = "tsc -p tsconfig.json --noEmit";
-  else delete packageJson.scripts.typecheck;
-  packageJson.scripts.start = "node dist/main.js";
+  if (profiles.includes("scss")) packageJson.scripts["styles:build"] = "vite build";
   if (!profiles.includes("typescript")) {
     delete packageJson.devDependencies["@types/node"];
     delete packageJson.devDependencies.typescript;
+    delete packageJson.scripts.typecheck;
   }
   if (!profiles.includes("scss")) {
     delete packageJson.devDependencies.sass;
     delete packageJson.scripts["styles:build"];
-    delete packageJson.allowScripts;
   }
+  if (!packageJson.devDependencies.sass) delete packageJson.allowScripts;
   await writeJsonAtomic(resolveInside(root, "package.json"), packageJson);
 
   const lock = await readJson(resolveInside(SCRIPT_ROOT, "package-lock.json"));
@@ -961,9 +1195,6 @@ async function writeCodeowners(root, owner) {
 async function initProject(root, { profile, projectName, runtime, owner }) {
   const selectedRuntime = parseRuntime(runtime);
   const profiles = parseProfiles(profile, selectedRuntime);
-  if (selectedRuntime === "custom" && profiles.includes("docker")) {
-    throw new FoundationError("Custom Docker projects must use adopt so an existing Dockerfile can be preserved and checked.");
-  }
   const name = String(projectName ?? path.basename(root)).trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9._-]{0,213}$/.test(name)) throw new FoundationError(`Invalid project name: ${name}`);
 
@@ -973,7 +1204,7 @@ async function initProject(root, { profile, projectName, runtime, owner }) {
   if (currentManifest?.mode === "consumer") throw new FoundationError("This project is already initialized.");
 
   const sourceManifest = await readJson(resolveInside(SCRIPT_ROOT, ".foundation/manifest.json"));
-  const selectedSeeds = sourceManifest.seedFiles.filter((item) => seedSelected(item, profiles) && !(item === "src/main.js" && profiles.includes("typescript")));
+  const selectedSeeds = sourceManifest.seedFiles.filter((item) => seedSelected(item, profiles));
   const selectedManaged = managedPathsForProfiles(profiles);
   const destinationPaths = [
     ...selectedManaged,
@@ -998,8 +1229,7 @@ async function initProject(root, { profile, projectName, runtime, owner }) {
       }
     }
 
-    if (selectedRuntime === "node") await createNodeFiles(root, name, profiles);
-    if (profiles.includes("typescript")) await rm(resolveInside(root, "src/main.js"), { force: true });
+    if (profiles.includes("assets")) await createAssetFiles(root, name, profiles);
     await writeJsonAtomic(resolveInside(root, ".foundation/project.json"), projectConfiguration(name, selectedRuntime, profiles));
     await writeFile(resolveInside(root, "README.md"), consumerReadme(name, selectedRuntime, profiles), "utf8");
     await writeFile(resolveInside(root, "PROJECT.md"), projectDocument(name, selectedRuntime, profiles), "utf8");
@@ -1008,7 +1238,7 @@ async function initProject(root, { profile, projectName, runtime, owner }) {
       const composePath = resolveInside(root, "compose.yaml");
       const compose = await readFile(composePath, "utf8");
       await writeFile(composePath, compose.replaceAll("project-foundation", name), "utf8");
-      await writeFile(resolveInside(root, ".env.example"), `COMPOSE_PROJECT_NAME=${name}\nPORT=3000\n`, "utf8");
+      await writeFile(resolveInside(root, ".env.example"), `COMPOSE_PROJECT_NAME=${name}\nAPP_ENV=development\nPORT=8080\nVITE_DEV_SERVER=\n`, "utf8");
     }
 
     for (const [profileName, profilePaths] of Object.entries(PROFILE_PATHS)) {
@@ -1023,7 +1253,7 @@ async function initProject(root, { profile, projectName, runtime, owner }) {
     const managedFiles = {};
     for (const relativePath of selectedManaged) managedFiles[relativePath] = await hashFile(resolveInside(root, relativePath));
     const consumerManifest = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       foundationVersion: FOUNDATION_VERSION,
       mode: "consumer",
       activeProfiles: profiles,
@@ -1033,6 +1263,7 @@ async function initProject(root, { profile, projectName, runtime, owner }) {
       upstreamOnlyFiles: sourceManifest.upstreamOnlyFiles,
     };
     await writeJsonAtomic(manifestPath, consumerManifest);
+    await writeArchitectureDocument(root);
 
     const validation = await validateProject(root, { strict: false });
     if (validation.errors.length) throw new FoundationError("Initialized project did not validate.", validation.errors);
@@ -1058,13 +1289,15 @@ function adoptionCachePath(root) {
 }
 
 async function adoptPlan(root, { profile, projectName, runtime, owner }) {
-  const selectedRuntime = parseRuntime(runtime ?? "custom");
+  const selectedRuntime = parseRuntime(runtime ?? "php");
   const profiles = parseProfiles(profile, selectedRuntime);
   const name = String(projectName ?? path.basename(root)).trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9._-]{0,213}$/.test(name)) throw new FoundationError(`Invalid project name: ${name}`);
   if (await exists(resolveInside(root, ".foundation/manifest.json"))) throw new FoundationError("This project already has a Foundation manifest.");
 
   const selectedManaged = managedPathsForProfiles(profiles);
+  const sourceManifest = await readJson(resolveInside(SCRIPT_ROOT, ".foundation/manifest.json"));
+  const selectedSeeds = sourceManifest.seedFiles.filter((item) => seedSelected(item, profiles));
   const creates = [];
   const conflicts = [];
   for (const relativePath of selectedManaged) {
@@ -1075,11 +1308,16 @@ async function adoptPlan(root, { profile, projectName, runtime, owner }) {
   for (const [relativePath, kind] of [["README.md", "readme"], ["PROJECT.md", "project"]]) {
     if (!(await exists(resolveInside(root, relativePath)))) creates.push({ path: relativePath, kind });
   }
+  const generatedSeeds = new Set(["README.md", "PROJECT.md", ".foundation/project.json", ".github/CODEOWNERS", "package.json", "package-lock.json"]);
+  for (const relativePath of selectedSeeds) {
+    if (generatedSeeds.has(relativePath)) continue;
+    if (!(await exists(resolveInside(root, relativePath)))) creates.push({ path: relativePath, kind: "seed" });
+    else if (relativePath === "ARCHITECTURE.md") conflicts.push("ARCHITECTURE.md already exists and would conflict with the generated Foundation architecture index");
+  }
   const configurationPath = resolveInside(root, ".foundation/project.json");
   let existingConfiguration;
   if (!(await exists(configurationPath))) {
-    if (selectedRuntime === "custom" && profiles.includes("docker")) conflicts.push("Custom Docker adoption requires a project-owned .foundation/project.json command contract");
-    else creates.push({ path: ".foundation/project.json", kind: "configuration" });
+    creates.push({ path: ".foundation/project.json", kind: "configuration" });
   } else {
     const configurationErrors = [];
     existingConfiguration = await readJson(configurationPath);
@@ -1093,19 +1331,11 @@ async function adoptPlan(root, { profile, projectName, runtime, owner }) {
     if (!/^[A-Za-z0-9-]{1,39}$/.test(normalizedOwner)) conflicts.push(".github/CODEOWNERS requires --owner");
     else creates.push({ path: ".github/CODEOWNERS", kind: "codeowners", owner: normalizedOwner });
   }
-  if (profiles.includes("docker")) {
-    const configuredDockerfile = existingConfiguration?.docker?.file ?? "Dockerfile";
-    try {
-      if (selectedRuntime === "custom" && !(await exists(resolveInside(root, configuredDockerfile)))) conflicts.push(`${configuredDockerfile} is required for custom Docker adoption`);
-    } catch (error) {
-      conflicts.push(error.message);
-    }
-    for (const relativePath of ["compose.yaml", ".dockerignore", ".env.example", "Makefile"]) {
-      if (!(await exists(resolveInside(root, relativePath)))) creates.push({ path: relativePath, kind: "seed" });
-    }
-  }
-  if (profiles.includes("typescript") || profiles.includes("scss") || selectedRuntime === "node") {
-    conflicts.push("Existing Node projects must provide their own package files; use init for the complete Node starter.");
+  if (profiles.includes("assets")) {
+    const hasPackage = await exists(resolveInside(root, "package.json"));
+    const hasLock = await exists(resolveInside(root, "package-lock.json"));
+    if (!hasPackage && !hasLock) creates.push({ path: "package.json", kind: "asset-package" });
+    else if (hasPackage !== hasLock) conflicts.push("package.json and package-lock.json must be adopted together");
   }
 
   const stateSha = await treeFingerprint(root);
@@ -1127,11 +1357,16 @@ async function adoptApply(root, planSha, confirmed) {
   if ((await treeFingerprint(root)) !== plan.stateSha) throw new FoundationError("Project state changed after adopt plan; run adopt plan again.");
   if (plan.conflicts.length) throw new FoundationError("Adoption conflicts must be resolved before apply.", plan.conflicts);
 
-  const changePaths = [...plan.creates.map((item) => item.path), ".foundation/manifest.json"];
+  const changePaths = [
+    ...plan.creates.map((item) => item.path),
+    ...(plan.creates.some((item) => item.kind === "asset-package") ? ["package-lock.json"] : []),
+    ".foundation/manifest.json",
+  ];
   const snapshots = await snapshotPaths(root, changePaths);
   try {
     for (const item of plan.creates) {
       if (item.kind === "managed" || item.kind === "seed") await copyFoundationFile(SCRIPT_ROOT, root, item.path);
+      else if (item.kind === "asset-package") await createAssetFiles(root, plan.name, plan.profiles);
       else if (item.kind === "readme") await writeFile(resolveInside(root, item.path), consumerReadme(plan.name, plan.runtime, plan.profiles), "utf8");
       else if (item.kind === "project") await writeFile(resolveInside(root, item.path), projectDocument(plan.name, plan.runtime, plan.profiles), "utf8");
       else if (item.kind === "configuration") await writeJsonAtomic(resolveInside(root, item.path), projectConfiguration(plan.name, plan.runtime, plan.profiles));
@@ -1147,7 +1382,7 @@ async function adoptApply(root, planSha, confirmed) {
     for (const relativePath of selectedManaged) managedFiles[relativePath] = await hashFile(resolveInside(root, relativePath));
     const sourceManifest = await readJson(resolveInside(SCRIPT_ROOT, ".foundation/manifest.json"));
     await writeJsonAtomic(resolveInside(root, ".foundation/manifest.json"), {
-      schemaVersion: 1,
+      schemaVersion: 2,
       foundationVersion: FOUNDATION_VERSION,
       mode: "consumer",
       activeProfiles: plan.profiles,
@@ -1156,6 +1391,7 @@ async function adoptApply(root, planSha, confirmed) {
       seedFiles: plan.creates.filter((item) => item.kind !== "managed").map((item) => item.path),
       upstreamOnlyFiles: sourceManifest.upstreamOnlyFiles,
     });
+    await writeArchitectureDocument(root);
     const validation = await validateProject(root, { strict: false });
     if (validation.errors.length) throw new FoundationError("Adopted project did not validate.", validation.errors);
   } catch (error) {
@@ -1166,8 +1402,262 @@ async function adoptApply(root, planSha, confirmed) {
   return plan;
 }
 
-function runCommand(command, args, { input, timeout = 10_000 } = {}) {
-  const useWindowsShell = process.platform === "win32" && command === "npm";
+function phpSingleQuoted(value) {
+  return String(value).replaceAll("\\", "\\\\").replaceAll("'", "\\'");
+}
+
+function validatePageInput(slug, routePath, title) {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(slug ?? ""))) throw new FoundationError("Page slug must be lowercase kebab-case.");
+  if (typeof routePath !== "string" || !/^\/(?:[a-z0-9][a-z0-9\-/]*?)?$/.test(routePath) || routePath.includes("//")) {
+    throw new FoundationError("Page path must be an absolute lowercase URL path without a query or fragment.");
+  }
+  if (typeof title !== "string" || !title.trim() || /[\r\n]/.test(title) || title.length > 120) throw new FoundationError("Page title is required and must be at most 120 characters.");
+}
+
+async function architectureDocument(root) {
+  const configuration = await readJson(resolveInside(root, ".foundation/project.json"));
+  const manifest = await readJson(resolveInside(root, ".foundation/manifest.json"));
+  const catalog = await readJson(resolveInside(root, ".foundation/capabilities.json"));
+  const files = await walk(root);
+  const pageViews = files
+    .filter((entry) => !entry.symlink && /^resource\/views\/pages\/[a-z0-9][a-z0-9-]*\.php$/.test(entry.path))
+    .map((entry) => path.posix.basename(entry.path, ".php"))
+    .sort();
+  const active = new Set(configuration.capabilities?.active ?? []);
+  const capabilities = (catalog.capabilities ?? []).filter((item) => active.has(item.id)).sort((left, right) => left.id.localeCompare(right.id));
+  const pageLines = pageViews.length ? pageViews.map((page) => `- \`${page}\`: \`resource/views/pages/${page}.php\``).join("\n") : "- none";
+  const capabilityLines = capabilities.length
+    ? capabilities.map((item) => `- \`${item.id}\` via recipe \`${item.recipe}\`; triggers: ${(item.triggers ?? []).join(", ")}`).join("\n")
+    : "- none";
+  return `# Generated Architecture
+
+이 문서는 \`.foundation/project.json\`, capability catalog, 실제 페이지 View에서 생성된다. 직접 수정하지 말고 Foundation CLI를 사용한다.
+
+## Observed configuration
+
+- Runtime: \`${configuration.project.runtime}\`
+- Profiles: ${manifest.activeProfiles.join(", ")}
+- Page source: \`${configuration.pages.source}\`
+- Asset manifest: \`${configuration.assets.enabled ? configuration.assets.manifest : "not applicable"}\`
+- Docker: ${configuration.docker.enabled ? `\`${configuration.docker.service}\` via \`${configuration.docker.file}\`` : "not applicable"}
+
+## Dependency direction
+
+\`public/index.php -> bootstrap/app.php -> Symfony Routing -> PageController -> ViewRenderer -> PHP View\`
+
+HTTP Request, Response, and route matching belong to Symfony components. Page configuration belongs to \`config/pages.php\`. HTML belongs to PHP Views. Vite owns asset compilation only.
+
+## Pages
+
+${pageLines}
+
+## Active capabilities
+
+${capabilityLines}
+
+## Expansion gate
+
+Feature folders, provider adapters, page-specific asset entries, and dependencies are added only after an approved capability plan identifies their owner, evidence, tests, security boundary, and removal condition.
+`;
+}
+
+async function writeArchitectureDocument(root) {
+  await writeFile(resolveInside(root, "ARCHITECTURE.md"), await architectureDocument(root), "utf8");
+}
+
+async function addPage(root, { slug, routePath, title, scss = false, typescript = false }) {
+  validatePageInput(slug, routePath, title);
+  const manifest = await readJson(resolveInside(root, ".foundation/manifest.json"));
+  const profiles = new Set(manifest.activeProfiles ?? []);
+  if (scss && !profiles.has("scss")) throw new FoundationError("--scss requires the scss profile.");
+  if (typescript && !profiles.has("typescript")) throw new FoundationError("--typescript requires the typescript profile.");
+  const configurationPath = resolveInside(root, "config/pages.php");
+  const viewPath = `resource/views/pages/${slug}.php`;
+  const scssPath = `resource/scss/pages/${slug}.scss`;
+  const typeScriptPath = `resource/ts/pages/${slug}.ts`;
+  const pageTargets = [resolveInside(root, viewPath), ...(scss ? [resolveInside(root, scssPath)] : []), ...(typescript ? [resolveInside(root, typeScriptPath)] : [])];
+  for (const target of pageTargets) {
+    if (await exists(target)) throw new FoundationError(`Page file already exists: ${toPosix(path.relative(root, target))}`);
+  }
+  const configuration = await readFile(configurationPath, "utf8");
+  if (!configuration.includes("// <foundation:pages>") || !configuration.includes("// </foundation:pages>")) {
+    throw new FoundationError("config/pages.php is missing Foundation page markers; no files were changed.");
+  }
+  if (new RegExp(`^\\s*'${slug}'\\s*=>`, "m").test(configuration)) throw new FoundationError(`Page already exists: ${slug}`);
+  if (new RegExp(`'path'\\s*=>\\s*'${routePath.replaceAll("/", "\\/")}'`).test(configuration)) throw new FoundationError(`Route path already exists: ${routePath}`);
+
+  const assets = [];
+  if (typescript) assets.push(typeScriptPath);
+  if (scss) assets.push(scssPath);
+  const assetLines = assets.map((entry) => `            '${phpSingleQuoted(entry)}',`).join("\n");
+  const block = `    '${slug}' => [\n        'path' => '${phpSingleQuoted(routePath)}',\n        'view' => 'pages/${slug}',\n        'title' => '${phpSingleQuoted(title)}',\n        'description' => '',\n        'assets' => [${assetLines ? `\n${assetLines}\n        ` : ""}],\n    ],\n`;
+  const updated = configuration.replace("    // </foundation:pages>", `${block}    // </foundation:pages>`);
+  const relativeTargets = ["config/pages.php", viewPath, "ARCHITECTURE.md", ...(scss ? [scssPath] : []), ...(typescript ? [typeScriptPath] : [])];
+  const snapshots = await snapshotPaths(root, relativeTargets);
+  try {
+    await writeFile(configurationPath, updated, "utf8");
+    await mkdir(path.dirname(resolveInside(root, viewPath)), { recursive: true });
+    await writeFile(resolveInside(root, viewPath), `<?php\n\ndeclare(strict_types=1);\n\n/** @var Closure(string|int|float|Stringable|null): string $e */\n?>\n<section class="section section--${slug}" aria-labelledby="${slug}-title">\n    <div class="container">\n        <div class="inner">\n            <header class="section-header">\n                <h1 id="${slug}-title" class="section-title"><?= $e($title ?? '') ?></h1>\n                <div class="section-body"><p><?= $e($description ?? '') ?></p></div>\n            </header>\n            <div class="section-contents">\n                <!-- Assemble approved components here. -->\n            </div>\n        </div>\n    </div>\n</section>\n`, "utf8");
+    if (scss) {
+      await mkdir(path.dirname(resolveInside(root, scssPath)), { recursive: true });
+      await writeFile(resolveInside(root, scssPath), `@use "../abstract/tokens" as token;\n\n.section--${slug} {\n  padding-block: token.$section-space;\n}\n`, "utf8");
+    }
+    if (typescript) {
+      await mkdir(path.dirname(resolveInside(root, typeScriptPath)), { recursive: true });
+      await writeFile(resolveInside(root, typeScriptPath), `const root = document.querySelector<HTMLElement>(".section--${slug}");\n\nif (root) {\n  root.dataset.enhanced = "true";\n}\n`, "utf8");
+    }
+    await writeArchitectureDocument(root);
+  } catch (error) {
+    await restoreSnapshots(root, snapshots);
+    throw error;
+  }
+  return { slug, routePath, files: relativeTargets.filter((item) => item !== "config/pages.php" && item !== "ARCHITECTURE.md") };
+}
+
+function capabilityCachePath(root) {
+  return path.join(tmpdir(), `project-foundation-capability-${sha256(path.resolve(root)).slice(0, 24)}.json`);
+}
+
+function capabilityClosure(catalog, requestedId, active) {
+  const byId = new Map((catalog.capabilities ?? []).map((item) => [item.id, item]));
+  if (!byId.has(requestedId)) throw new FoundationError(`Unknown capability: ${requestedId}`);
+  const ordered = [];
+  const visiting = new Set();
+  const visit = (id) => {
+    if (active.has(id) || ordered.includes(id)) return;
+    if (visiting.has(id)) throw new FoundationError(`Capability dependency cycle: ${id}`);
+    const capability = byId.get(id);
+    if (!capability) throw new FoundationError(`Unknown capability dependency: ${id}`);
+    visiting.add(id);
+    for (const requirement of capability.requires ?? []) visit(requirement);
+    visiting.delete(id);
+    ordered.push(id);
+  };
+  visit(requestedId);
+  return ordered;
+}
+
+async function capabilityPlan(root, requestedId) {
+  const catalog = await readJson(resolveInside(root, ".foundation/capabilities.json"));
+  const configuration = await readJson(resolveInside(root, ".foundation/project.json"));
+  const active = new Set(configuration.capabilities?.active ?? []);
+  const additions = capabilityClosure(catalog, requestedId, active);
+  const selected = additions.map((id) => catalog.capabilities.find((item) => item.id === id));
+  const conflicts = selected.flatMap((item) => (item.conflicts ?? []).filter((id) => active.has(id) || additions.includes(id)).map((id) => `${item.id} conflicts with ${id}`));
+  const unverified = selected.flatMap((item) => [...(item.dependencies?.composer ?? []), ...(item.dependencies?.npm ?? [])].filter((item) => /selected by project|only when selected|project approval/i.test(item)).map((item) => `${item.id}: ${item}`));
+  const plan = {
+    schemaVersion: 1,
+    root: path.resolve(root),
+    stateSha: await treeFingerprint(root),
+    requested: requestedId,
+    additions,
+    conflicts,
+    unverified,
+    files: selected.flatMap((item) => item.files ?? []),
+    dependencies: selected.map((item) => ({ id: item.id, ...item.dependencies })),
+    securityRules: [...new Set(selected.flatMap((item) => item.securityRules ?? []))],
+    tests: selected.flatMap((item) => (item.tests ?? []).map((test) => `${item.id}: ${test}`)),
+  };
+  const planSha = sha256(JSON.stringify(plan));
+  await writeJsonAtomic(capabilityCachePath(root), { ...plan, planSha });
+  const output = { ...plan, root: undefined, stateSha: undefined, planSha };
+  console.log(JSON.stringify(output, null, 2));
+  return { ...plan, planSha };
+}
+
+async function capabilityApply(root, requestedId, planSha, confirmed) {
+  if (confirmed !== requestedId) throw new FoundationError("capability apply requires --confirm with the exact capability ID.");
+  if (!/^[a-f0-9]{64}$/.test(String(planSha ?? ""))) throw new FoundationError("capability apply requires --plan-sha with a SHA-256 value.");
+  const cachePath = capabilityCachePath(root);
+  if (!(await exists(cachePath))) throw new FoundationError("No capability plan is available; run capability plan again.");
+  const plan = await readJson(cachePath);
+  if (plan.planSha !== planSha || plan.requested !== requestedId || plan.root !== path.resolve(root)) throw new FoundationError("Capability plan identity does not match.");
+  if ((await treeFingerprint(root)) !== plan.stateSha) throw new FoundationError("Project state changed after capability plan; run capability plan again.");
+  if (plan.conflicts.length) throw new FoundationError("Capability conflicts must be resolved before apply.", plan.conflicts);
+  if (plan.unverified.length) throw new FoundationError("Provider or dependency choices remain Unverified; record them in Project Intake and plan again.", plan.unverified);
+
+  const snapshots = await snapshotPaths(root, [".foundation/project.json", "PROJECT.md", "ARCHITECTURE.md"]);
+  try {
+    const configurationPath = resolveInside(root, ".foundation/project.json");
+    const configuration = await readJson(configurationPath);
+    configuration.capabilities.active = [...new Set([...(configuration.capabilities.active ?? []), ...plan.additions])].sort();
+    await writeJsonAtomic(configurationPath, configuration);
+    let project = await readFile(resolveInside(root, "PROJECT.md"), "utf8");
+    const body = `## Approved Capabilities\n\n${configuration.capabilities.active.map((id) => `- \`${id}\``).join("\n")}\n`;
+    if (/^## Approved Capabilities\s*$/m.test(project)) {
+      project = project.replace(/^## Approved Capabilities\s*$[\s\S]*?(?=^## |\s*$)/m, body);
+    } else {
+      project = `${project.trimEnd()}\n\n${body}`;
+    }
+    await writeFile(resolveInside(root, "PROJECT.md"), project, "utf8");
+    await writeArchitectureDocument(root);
+  } catch (error) {
+    await restoreSnapshots(root, snapshots);
+    throw error;
+  }
+  await rm(cachePath, { force: true });
+  return plan;
+}
+
+async function readEvidence(root) {
+  const evidencePath = resolveInside(root, ".foundation/evidence.json");
+  if (!(await exists(evidencePath))) return { schemaVersion: 1, records: [] };
+  return readJson(evidencePath);
+}
+
+async function addEvidence(root, { status, statement, sourceFile, sourceUrl }) {
+  const normalizedStatus = String(status ?? "").trim().toLowerCase();
+  if (!new Set(["observed", "inferred", "unverified"]).has(normalizedStatus)) throw new FoundationError("Evidence status must be observed, inferred, or unverified.");
+  if (typeof statement !== "string" || !statement.trim() || /[\r\n]/.test(statement)) throw new FoundationError("Evidence statement is required on one line.");
+  let source = null;
+  if (sourceFile) {
+    const relativePath = normalizeRelative(sourceFile);
+    const filePath = resolveInside(root, relativePath);
+    if (!(await exists(filePath))) throw new FoundationError(`Evidence source file does not exist: ${relativePath}`);
+    source = { type: "file", path: relativePath, sha256: await hashFile(filePath) };
+  } else if (sourceUrl) {
+    const sources = await readJson(resolveInside(root, "SOURCES.json"));
+    const registered = (sources.sources ?? []).find((item) => item.url === sourceUrl);
+    if (!registered) throw new FoundationError("Observed URL evidence must exactly match a registered official source.");
+    source = { type: "official-source", id: registered.id, url: registered.url, verifiedAt: registered.verifiedAt };
+  }
+  if (normalizedStatus === "observed" && !source) throw new FoundationError("Observed evidence requires --source-file or --source-url.");
+  const evidence = await readEvidence(root);
+  const record = { status: normalizedStatus, statement: statement.trim(), source };
+  const id = sha256(JSON.stringify(record));
+  if (!(evidence.records ?? []).some((item) => item.id === id)) evidence.records.push({ id, ...record });
+  await writeJsonAtomic(resolveInside(root, ".foundation/evidence.json"), evidence);
+  return { id, ...record };
+}
+
+async function auditEvidence(root) {
+  const evidence = await readEvidence(root);
+  const errors = [];
+  if (evidence.schemaVersion !== 1 || !Array.isArray(evidence.records)) errors.push("evidence.json: unsupported schema");
+  const ids = new Set();
+  const sources = await readJson(resolveInside(root, "SOURCES.json"));
+  for (const record of evidence.records ?? []) {
+    if (!record.id || ids.has(record.id)) errors.push(`evidence.json: duplicate or missing record ID ${record.id ?? "<missing>"}`);
+    ids.add(record.id);
+    if (!new Set(["observed", "inferred", "unverified"]).has(record.status)) errors.push(`${record.id}: invalid evidence status`);
+    if (record.status === "observed" && !record.source) errors.push(`${record.id}: observed evidence has no source`);
+    if (record.source?.type === "file") {
+      try {
+        const filePath = resolveInside(root, record.source.path);
+        if (!(await exists(filePath)) || (await hashFile(filePath)) !== record.source.sha256) errors.push(`${record.id}: file evidence changed or is missing`);
+      } catch (error) {
+        errors.push(`${record.id}: ${error.message}`);
+      }
+    }
+    if (record.source?.type === "official-source" && !(sources.sources ?? []).some((item) => item.id === record.source.id && item.url === record.source.url)) {
+      errors.push(`${record.id}: official source is no longer registered`);
+    }
+  }
+  return { errors, count: ids.size };
+}
+
+function runCommand(command, args, { input, timeout = 10_000, cwd, env } = {}) {
+  const useWindowsShell = process.platform === "win32" && ["npm", "composer"].includes(command);
   const result = spawnSync(command, args, {
     encoding: "utf8",
     input,
@@ -1175,6 +1665,8 @@ function runCommand(command, args, { input, timeout = 10_000 } = {}) {
     windowsHide: true,
     maxBuffer: 4 * 1024 * 1024,
     shell: useWindowsShell,
+    cwd,
+    env: env ? { ...process.env, ...env } : process.env,
   });
   return {
     ok: result.status === 0,
@@ -1193,30 +1685,38 @@ async function doctor(root) {
   const nodeVersion = process.versions.node;
   checks.push({ name: "Node", ok: compareVersions(nodeVersion, "22.22.0") >= 0 && compareVersions(nodeVersion, "25.0.0") < 0, value: nodeVersion, required: true });
 
-  if (configuration.project.runtime === "node") {
-    const npm = runCommand("npm", ["--version"]);
+  const dockerProfile = manifest.activeProfiles.includes("docker");
+  const php = runCommand("php", ["--version"], { cwd: root });
+  const phpVersion = (php.stdout || php.stderr).match(/PHP\s+(\d+\.\d+\.\d+)/)?.[1] ?? php.stderr;
+  checks.push({ name: "PHP", ok: php.ok && compareVersions(phpVersion, toolchain.php.supported[0]) >= 0 && compareVersions(phpVersion, "8.6.0") < 0, value: phpVersion, required: !dockerProfile });
+  const composer = runCommand("composer", ["--version"], { cwd: root });
+  const composerVersion = (composer.stdout || composer.stderr).match(/\d+\.\d+\.\d+/)?.[0] ?? composer.stderr;
+  checks.push({ name: "Composer", ok: composer.ok && compareVersions(composerVersion, toolchain.composer.minimum) >= 0, value: composerVersion, required: !dockerProfile });
+
+  if (configuration.assets?.enabled) {
+    const npm = runCommand("npm", ["--version"], { cwd: root });
     const npmVersion = npm.stdout || npm.stderr;
     checks.push({ name: "npm", ok: npm.ok && compareVersions(npmVersion, toolchain.npm.minimum) >= 0, value: npmVersion, required: true });
   }
-  const git = runCommand("git", ["--version"]);
+  const git = runCommand("git", ["--version"], { cwd: root });
   checks.push({ name: "Git", ok: git.ok, value: git.stdout || git.stderr, required: true });
 
-  if (manifest.activeProfiles.includes("docker")) {
-    const docker = runCommand("docker", ["--version"]);
+  if (dockerProfile) {
+    const docker = runCommand("docker", ["--version"], { cwd: root });
     checks.push({ name: "Docker", ok: docker.ok, value: docker.stdout || docker.stderr, required: true });
-    const compose = runCommand("docker", ["compose", "version", "--short"]);
+    const compose = runCommand("docker", ["compose", "version", "--short"], { cwd: root });
     const composeVersion = compose.stdout || compose.stderr;
     checks.push({ name: "Compose", ok: compose.ok && compareVersions(composeVersion, toolchain.compose.minimum) >= 0, value: composeVersion, required: true });
-    const buildx = runCommand("docker", ["buildx", "version"]);
+    const buildx = runCommand("docker", ["buildx", "version"], { cwd: root });
     const buildxVersion = buildx.stdout.match(/v?\d+\.\d+\.\d+/)?.[0] ?? buildx.stderr;
     checks.push({ name: "Buildx", ok: buildx.ok && compareVersions(buildxVersion, toolchain.buildx.minimum) >= 0, value: buildxVersion, required: true });
-    const daemon = runCommand("docker", ["info", "--format", "{{.ServerVersion}}"], { timeout: 15_000 });
+    const daemon = runCommand("docker", ["info", "--format", "{{.ServerVersion}}"], { timeout: 15_000, cwd: root });
     checks.push({ name: "Docker daemon", ok: daemon.ok, value: daemon.stdout || daemon.stderr, required: true });
   }
 
-  const make = runCommand("make", ["--version"]);
+  const make = runCommand("make", ["--version"], { cwd: root });
   checks.push({ name: "GNU Make", ok: make.ok, value: make.stdout.split("\n")[0] || make.stderr, required: false });
-  const gh = runCommand("gh", ["--version"]);
+  const gh = runCommand("gh", ["--version"], { cwd: root });
   checks.push({ name: "GitHub CLI", ok: gh.ok, value: gh.stdout.split("\n")[0] || gh.stderr, required: false });
   checks.push({
     name: "Codex project hooks",
@@ -1238,7 +1738,27 @@ async function runProjectCommand(root, name) {
   const errors = [];
   validateCommandSpecification(name, specification, errors);
   if (errors.length) throw new FoundationError(`Invalid project command: ${name}`, errors);
-  const result = runCommand(specification.command, specification.args, { timeout: 120_000 });
+  let command = specification.command;
+  let args = specification.args;
+  const composerAvailable = command === "composer" ? runCommand("composer", ["--version"], { cwd: root }).ok : true;
+  const useComposerContainer = command === "composer"
+    && (process.env.FOUNDATION_PHP_CONTAINER === "1" || (!composerAvailable && configuration.docker?.enabled));
+  if (useComposerContainer) {
+    const toolchain = await readJson(resolveInside(root, ".foundation/toolchain.json"));
+    command = "docker";
+    args = [
+      "run",
+      "--rm",
+      "--volume",
+      `${path.resolve(root)}:/app`,
+      "--workdir",
+      "/app",
+      toolchain.docker.images.composer,
+      "composer",
+      ...specification.args,
+    ];
+  }
+  const result = runCommand(command, args, { timeout: command === "docker" ? 600_000 : 120_000, cwd: root });
   return {
     name,
     applicable: true,
@@ -1252,24 +1772,88 @@ async function runContainerCommand(root, mode) {
   if (!manifest.activeProfiles.includes("docker")) return { applicable: false, results: [] };
   const configuration = await readJson(resolveInside(root, ".foundation/project.json"));
   const dockerfile = normalizeRelative(configuration.docker.file);
-  const target = configuration.docker.targets?.production;
-  const imageName = `${configuration.project.name.replace(/[^a-z0-9._-]/g, "-")}:foundation-ci`;
+  const imageBase = configuration.project.name.replace(/[^a-z0-9._-]/g, "-");
+  const buildTargets = [
+    ...(mode === "verify" ? [configuration.docker.targets?.test] : []),
+    configuration.docker.targets?.production,
+    configuration.docker.targets?.web,
+  ].filter(Boolean);
+  const imageNames = buildTargets.map((target) => ({ target, name: `${imageBase}:${target}` }));
   const commands = [];
   if (["verify", "config"].includes(mode)) commands.push(["docker", ["compose", "config", "-q"]]);
   if (mode === "verify") commands.push(["docker", ["buildx", "build", "--check", "--file", dockerfile, "."]]);
   if (["verify", "image"].includes(mode)) {
-    const args = ["buildx", "build", "--file", dockerfile, "--target", target, "--tag", imageName, "--load"];
-    if (process.env.GITHUB_ACTIONS === "true") args.push("--cache-from", "type=gha", "--cache-to", "type=gha,mode=max");
-    args.push(".");
-    commands.push(["docker", args]);
+    for (const image of imageNames) {
+      const args = ["buildx", "build", "--file", dockerfile, "--target", image.target, "--tag", image.name, "--load"];
+      if (process.env.GITHUB_ACTIONS === "true") {
+        const cacheScope = `foundation-${image.target}`;
+        args.push("--cache-from", `type=gha,scope=${cacheScope}`, "--cache-to", `type=gha,mode=max,scope=${cacheScope}`);
+      }
+      args.push(".");
+      commands.push(["docker", args]);
+    }
   }
   const results = [];
   for (const [command, args] of commands) {
-    const result = runCommand(command, args, { timeout: 20 * 60_000 });
+    const result = runCommand(command, args, { timeout: 20 * 60_000, cwd: root });
     results.push({ command: [command, ...args].join(" "), ...result });
     if (!result.ok) throw new FoundationError(`Container command failed: ${[command, ...args].join(" ")}`, [result.stderr || result.stdout]);
   }
-  return { applicable: true, imageName: ["verify", "image"].includes(mode) ? imageName : undefined, results };
+  if (mode === "verify") {
+    const projectName = `foundation-verify-${process.pid}`;
+    const environment = { PORT: "0", COMPOSE_PROJECT_NAME: projectName };
+    const compose = (...args) => runCommand("docker", ["compose", "--project-name", projectName, ...args], {
+      timeout: 20 * 60_000,
+      cwd: root,
+      env: environment,
+    });
+    let runtimeError;
+    try {
+      const up = compose("up", "--build", "--detach", "--wait");
+      if (!up.ok) throw new FoundationError("Compose runtime failed to become healthy.", [up.stderr || up.stdout]);
+
+      const published = compose("port", "web", "8080");
+      const port = published.stdout.match(/:(\d+)$/)?.[1];
+      if (!published.ok || !port) throw new FoundationError("Could not resolve the ephemeral web port.", [published.stderr || published.stdout]);
+
+      const phpUser = runCommand("docker", ["inspect", `${projectName}-php-1`, "--format", "{{.Config.User}}"], { cwd: root });
+      const webUser = runCommand("docker", ["inspect", `${projectName}-web-1`, "--format", "{{.Config.User}}"], { cwd: root });
+      for (const [service, inspection] of [["php", phpUser], ["web", webUser]]) {
+        if (!inspection.ok || !inspection.stdout || ["0", "root"].includes(inspection.stdout.toLowerCase())) {
+          throw new FoundationError(`${service} runtime is not configured as a non-root user.`, [inspection.stderr || inspection.stdout]);
+        }
+      }
+
+      const origin = `http://127.0.0.1:${port}`;
+      const health = await fetch(`${origin}/healthz`, { signal: AbortSignal.timeout(10_000) });
+      const page = await fetch(`${origin}/`, { signal: AbortSignal.timeout(10_000) });
+      const markup = await page.text();
+      const assetPaths = [...markup.matchAll(/(?:src|href)="(\/build\/assets\/[^"]+)"/g)].map((match) => match[1]);
+      if (!health.ok || (await health.text()).trim() !== "ok") throw new FoundationError("Runtime health endpoint failed.");
+      if (!page.ok || !markup.includes('<section class="section section--hero"')) throw new FoundationError("Runtime page did not render the canonical section.");
+      if (!assetPaths.some((assetPath) => assetPath.endsWith(".css")) || !assetPaths.some((assetPath) => assetPath.endsWith(".js"))) {
+        throw new FoundationError("Runtime page must reference built CSS and JavaScript assets.");
+      }
+      for (const assetPath of assetPaths) {
+        const asset = await fetch(`${origin}${assetPath}`, { signal: AbortSignal.timeout(10_000) });
+        if (!asset.ok || !asset.headers.get("cache-control")?.includes("immutable")) throw new FoundationError("Built asset delivery or cache policy failed.");
+      }
+
+      results.push({
+        command: "compose runtime e2e",
+        ok: true,
+        stdout: `health=200 page=200 assets=${assetPaths.length} php-user=${phpUser.stdout} web-user=${webUser.stdout}`,
+        stderr: "",
+      });
+    } catch (error) {
+      runtimeError = error;
+    } finally {
+      const down = compose("down", "--remove-orphans");
+      if (!down.ok && !runtimeError) runtimeError = new FoundationError("Could not clean the Compose verification project.", [down.stderr || down.stdout]);
+    }
+    if (runtimeError) throw runtimeError;
+  }
+  return { applicable: true, imageNames: ["verify", "image"].includes(mode) ? imageNames.map((item) => item.name) : [], results };
 }
 
 function gitOutput(root, args) {
@@ -1341,10 +1925,12 @@ async function verifyProject(root, { base = "origin/main", scope = "all" } = {})
     }
   }
   if (["all", "dependency"].includes(scope)) {
-    const result = await runProjectCommand(root, "dependencyAudit");
-    results.push(result);
-    if (!result.applicable) warnings.push("No runtime dependency audit command is configured; GitHub capability detection will report this limitation.");
-    else if (!result.ok) errors.push(`Dependency audit failed:\n${result.output}`);
+    for (const name of ["dependencyAudit", "assetAudit"]) {
+      const result = await runProjectCommand(root, name);
+      results.push(result);
+      if (!result.applicable && name === "dependencyAudit") warnings.push("No runtime dependency audit command is configured; GitHub capability detection will report this limitation.");
+      else if (!result.ok) errors.push(`${name} failed:\n${result.output}`);
+    }
   }
   return { errors: [...new Set(errors)], warnings: [...new Set(warnings)], results };
 }
@@ -1369,9 +1955,11 @@ async function agentContext(root) {
   return [
     "Read FOUNDATION.md, PROJECT.md, and the nearest AGENTS.md before editing.",
     `Runtime: ${configuration.project.runtime}. Active profiles: ${manifest.activeProfiles.join(", ")}.`,
+    `Project Intake: ${configuration.intake.state}. Unverified: ${configuration.intake.unverified.length ? configuration.intake.unverified.join(", ") : "none"}.`,
     `Configured project commands: ${commandNames.length ? commandNames.join(", ") : "none"}.`,
     "Before finishing run: node scripts/foundation.mjs verify --base origin/main",
-    "Use architecture-selection for structural changes and change-workflow for implementation changes.",
+    "Never convert Inferred or Unverified information into Observed facts. Use evidence add/audit for durable completion claims.",
+    "Use site-starter for project intake, architecture-selection for structural changes, and change-workflow for implementation changes.",
   ].join("\n");
 }
 
@@ -1379,6 +1967,24 @@ async function agentHook(root, eventName) {
   const input = await readStandardInputJson();
   if (eventName === "session-start") {
     return { hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: await agentContext(root) } };
+  }
+  if (eventName === "pre-tool-use") {
+    const toolInput = input.tool_input ?? {};
+    const command = typeof toolInput.command === "string" ? toolInput.command : JSON.stringify(toolInput);
+    const deny = (reason) => ({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } });
+    if (/(?:git\s+reset\s+--hard|git\s+clean\s+-[^\s]*f|git\s+push[^\n]*--force(?:\s|$)|rm\s+-rf\s+(?:~|\/)(?:\s|$))/i.test(command)) {
+      return deny("Destructive or history-rewriting command is blocked by Project Foundation.");
+    }
+    const manifest = await readJson(resolveInside(root, ".foundation/manifest.json"));
+    if (manifest.mode === "consumer" && MANAGED_PATHS.some((managedPath) => command.includes(managedPath))) {
+      return deny("Foundation-managed files cannot be edited directly in a consumer project; use foundation update.");
+    }
+    const configuration = await readJson(resolveInside(root, ".foundation/project.json"));
+    const usesFoundationWorkflow = /foundation\.mjs\s+(?:page|capability|adopt|init)\b/.test(command);
+    if (manifest.mode === "consumer" && configuration.intake.state === "incomplete" && !usesFoundationWorkflow && /(?:Dockerfile|compose\.ya?ml|composer\.json|package\.json|src[\\/]|resource[\\/])/i.test(command)) {
+      return deny("Project Intake is incomplete. Record the missing project facts and use an approved Foundation plan before structural edits.");
+    }
+    return { hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: "Preserve Observed/Inferred/Unverified boundaries and record real verification evidence." } };
   }
   if (eventName !== "stop") throw new FoundationError(`Unknown agent hook event: ${eventName}`);
   const status = gitOutput(root, ["status", "--porcelain=v1"]);
@@ -1686,9 +2292,16 @@ function printUsage() {
   console.log(`Project Foundation ${FOUNDATION_VERSION}
 
 Usage:
-  foundation.mjs init --runtime node [--profile github,docker,typescript,scss] [--project-name name] [--owner login]
-  foundation.mjs adopt plan --runtime custom [--profile github,docker] [--project-name name] [--owner login]
+  foundation.mjs init --runtime php [--profile github,docker,typescript,scss] [--project-name name] [--owner login]
+  foundation.mjs adopt plan --runtime php [--profile github,docker,typescript,scss] [--project-name name] [--owner login]
   foundation.mjs adopt apply --plan-sha sha256 --confirm
+  foundation.mjs page add slug --path /path --title title [--scss] [--typescript]
+  foundation.mjs capability list
+  foundation.mjs capability plan id
+  foundation.mjs capability apply id --plan-sha sha256 --confirm id
+  foundation.mjs architecture render
+  foundation.mjs evidence add --status observed|inferred|unverified --statement text [--source-file path|--source-url url]
+  foundation.mjs evidence audit
   foundation.mjs validate [--strict]
   foundation.mjs verify [--base origin/main] [--scope all|policy|project|dependency]
   foundation.mjs run <configured-command>
@@ -1731,6 +2344,52 @@ async function main(argv = process.argv.slice(2), root = process.cwd()) {
     console.log(`Adopted Project Foundation with runtime ${result.runtime}.`);
     return;
   }
+  if (command === "page" && subcommand === "add") {
+    const result = await addPage(path.resolve(root), {
+      slug: positional[2],
+      routePath: options.get("path"),
+      title: options.get("title"),
+      scss: options.has("scss"),
+      typescript: options.has("typescript"),
+    });
+    console.log(`Added page ${result.slug} at ${result.routePath}: ${result.files.join(", ")}`);
+    return;
+  }
+  if (command === "capability" && subcommand === "list") {
+    const catalog = await readJson(resolveInside(path.resolve(root), ".foundation/capabilities.json"));
+    for (const capability of catalog.capabilities ?? []) console.log(`${capability.id}\t${(capability.triggers ?? []).join("; ")}`);
+    return;
+  }
+  if (command === "capability" && subcommand === "plan") {
+    await capabilityPlan(path.resolve(root), positional[2]);
+    return;
+  }
+  if (command === "capability" && subcommand === "apply") {
+    const result = await capabilityApply(path.resolve(root), positional[2], options.get("plan-sha"), options.get("confirm"));
+    console.log(`Approved capabilities: ${result.additions.join(", ") || "already active"}`);
+    return;
+  }
+  if (command === "architecture" && subcommand === "render") {
+    await writeArchitectureDocument(path.resolve(root));
+    console.log("Regenerated ARCHITECTURE.md from observed project configuration.");
+    return;
+  }
+  if (command === "evidence" && subcommand === "add") {
+    const record = await addEvidence(path.resolve(root), {
+      status: options.get("status"),
+      statement: options.get("statement"),
+      sourceFile: options.get("source-file"),
+      sourceUrl: options.get("source-url"),
+    });
+    console.log(JSON.stringify(record, null, 2));
+    return;
+  }
+  if (command === "evidence" && subcommand === "audit") {
+    const result = await auditEvidence(path.resolve(root));
+    if (result.errors.length) throw new FoundationError("Evidence audit failed.", result.errors);
+    console.log(`Evidence audit passed: ${result.count} records.`);
+    return;
+  }
   if (command === "validate") {
     const result = await validateProject(path.resolve(root), { strict: options.has("strict") });
     for (const warning of result.warnings) console.warn(`WARN ${warning}`);
@@ -1766,7 +2425,7 @@ async function main(argv = process.argv.slice(2), root = process.cwd()) {
       return;
     }
     for (const item of result.results) console.log(`OK ${item.command}`);
-    if (result.imageName) console.log(`Container image: ${result.imageName}`);
+    for (const imageName of result.imageNames ?? []) console.log(`Container image: ${imageName}`);
     return;
   }
   if (command === "doctor") {
@@ -1811,9 +2470,15 @@ export {
   FoundationError,
   MANAGED_PATHS,
   REQUIRED_CHECKS,
+  addEvidence,
+  addPage,
   adoptApply,
   adoptPlan,
   agentHook,
+  architectureDocument,
+  auditEvidence,
+  capabilityApply,
+  capabilityPlan,
   compareVersions,
   initProject,
   main,

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "assets-experience",
+  "purpose": "SCSS·TypeScript·Vite와 motion·Three.js 기능을 독립 entry와 명시적 수명주기로 구성한다.",
+  "intake": ["asset entries", "interaction map", "browser support", "reduced-motion behavior", "performance budgets"],
+  "decisions": ["page entry or reusable feature", "CSS or TypeScript", "library or platform API", "quality tiers"],
+  "ruleIds": ["PF-ASSET-001", "PF-TYPE-001", "PF-TYPE-002", "PF-INTERACTION-001", "PF-SCSS-001", "PF-SCSS-003"]
+}

@@ -1,5 +1,5 @@
 {
-  "description": "Project Foundation context and stop verification hooks.",
+  "description": "Project Foundation context, change-plan guard, and stop verification hooks.",
   "hooks": {
     "SessionStart": [
       {
@@ -11,6 +11,20 @@
             "commandWindows": "powershell -NoProfile -Command \"$root = git rev-parse --show-toplevel; node (Join-Path $root 'scripts/foundation.mjs') agent hook session-start\"",
             "statusMessage": "Loading Project Foundation context",
             "additionalContextLimit": 5000,
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/foundation.mjs\" agent hook pre-tool-use",
+            "commandWindows": "powershell -NoProfile -Command \"$root = git rev-parse --show-toplevel; node (Join-Path $root 'scripts/foundation.mjs') agent hook pre-tool-use\"",
+            "statusMessage": "Checking Project Foundation change boundary",
             "timeout": 15
           }
         ]

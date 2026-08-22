@@ -5,8 +5,10 @@
 .cursor
 .foundation
 node_modules
+vendor
 dist
 build
+public/build
 coverage
 .release
 .cache
@@ -19,6 +21,3 @@ playwright-report
 *.log
 *.pem
 *.key
-README.md
-CHANGELOG.md
-CONTRIBUTING.md

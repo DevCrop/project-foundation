@@ -1,59 +1,144 @@
 # Project Foundation
 
-언어·프레임워크와 분리된 공통 규칙, AI 에이전트 연결, Docker 계약, GitHub 운영과 검증을 제공하는 공개 MIT 템플릿이다. Foundation 관리 CLI만 Node를 사용하며 소비 애플리케이션은 Node 또는 Custom 런타임 어댑터를 선택한다.
+PHP 웹사이트를 위한 공통 규칙, 최소 파일 생성, SCSS·TypeScript·Vite, Nginx·PHP-FPM Docker, GitHub 운영과 AI 에이전트 검증을 제공하는 공개 MIT Template다. Foundation CLI만 Node를 사용하며 소비 애플리케이션은 PHP로 고정한다.
+
+Foundation은 최대 파일 구조를 복사하지 않는다. 프로젝트 정보를 먼저 분류하고 승인된 Page만 명시적으로 추가한다. Capability는 동일 상태에 묶인 SHA-256 계획을 승인받은 뒤 원자적으로 적용한다.
+
+## 먼저 제공해야 하는 정보
+
+새 프로젝트든 기존 프로젝트든 다음 정보를 먼저 제공한다. 모르는 값은 추측해서 채우지 말고 `Unverified`로 남긴다.
+
+1. 프로젝트명, 담당자, GitHub owner와 저장소 visibility
+2. 사이트 목적과 사용자 유형
+3. 페이지 목록, URL, 각 페이지의 서버 기능
+4. 제공된 디자인·이미지·Figma와 반응형 기준
+5. 공통 component 후보와 페이지 전용 영역
+6. 폼·인증·관리 UI·API·DB·업로드·결제·메일·CMS 여부
+7. motion·pin·Three.js·KTX2·DRACO 등 복잡한 interaction 여부
+8. 외부 공급자, 공식 API 문서, credential 책임자
+9. 지원 브라우저·접근성·SEO 요구
+10. Docker port, 배포 대상, secret 주입 방식, rollback 조건
+11. 이미지 크기·빌드·시작·readiness·프런트 성능 예산
+12. 기존 프로젝트라면 실제 install·lint·test·build·start 명령과 lockfile
+
+정보 상태는 다음처럼 기록한다.
+
+- `Observed`: 실제 파일, 디자인, 공식 문서, 실행 결과에서 확인
+- `Inferred`: 관찰 사실에서 도출했지만 사용자가 아직 확정하지 않음
+- `Unverified`: 확인되지 않아 구현 근거로 사용할 수 없음
+
+필수 정보가 `Unverified`인 구조·외부 연동·보안 변경은 plan까지만 만들고 apply하지 않는다.
+
+## 권장 작업 프로세스
+
+```text
+Intake 작성
+→ 저장소·디자인·기존 자산 조사
+→ 프로젝트 유형과 Capability 분류
+→ 최소 구조 후보·대안·파일 증가량 보고
+→ 사용자 승인
+→ plan SHA 생성
+→ 동일 상태에서 apply
+→ validate·verify·evidence
+→ PR stable checks
+→ ruleset 병합
+```
+
+에이전트의 설명은 증거가 아니다. 완료 판단에는 실제 파일·해시·공식 source ID·명령 종료 코드·테스트·API 응답만 사용한다.
 
 ## 새 프로젝트
 
-완성형 Node/TypeScript/SCSS/Docker 프로젝트:
-
 ```text
-node scripts/foundation.mjs init --runtime node --profile github,docker,typescript,scss --project-name my-project --owner github-login
-npm ci
+node scripts/foundation.mjs init --profile web,assets,typescript,scss,docker,github --project-name my-project --owner github-login
 node scripts/foundation.mjs doctor
+node scripts/foundation.mjs validate --strict
 node scripts/foundation.mjs verify --base origin/main
 ```
 
-언어 중립 프로젝트는 불필요한 npm·TypeScript·SCSS 파일을 만들지 않는다.
-
-```text
-node scripts/foundation.mjs init --runtime custom --profile core --project-name my-project
-node scripts/foundation.mjs validate --strict
-```
-
-`custom` Docker 프로젝트는 기존 Dockerfile과 명령 계약을 보존해야 하므로 `init` 대신 기존 프로젝트 도입 절차를 사용한다.
+기본 결과는 PHP PageController, 순수 PHP View, SCSS 공통 entry, TypeScript 공통 entry, Vite asset manifest, Nginx·PHP-FPM Compose와 GitHub stable checks다. DB·결제·Three.js 같은 기능 파일은 생성하지 않는다.
 
 ## 기존 프로젝트 도입
 
-Custom Docker 도입 전에는 프로젝트가 실제 명령과 target을 소유하도록 `.foundation/project.json`을 먼저 작성한다. command/args 배열에는 최소 `test`, `build`, `start`를 기록하며 Foundation은 셸 문자열을 추측하지 않는다.
-
 ```text
-node path/to/project-foundation/scripts/foundation.mjs adopt plan --runtime custom --profile github,docker --owner github-login
-node path/to/project-foundation/scripts/foundation.mjs adopt apply --plan-sha <출력된-sha256> --confirm
+node path/to/project-foundation/scripts/foundation.mjs adopt plan --profile web,typescript,scss,docker,github --project-name my-project --owner github-login
+node path/to/project-foundation/scripts/foundation.mjs adopt apply --plan-sha <sha256> --confirm
 node scripts/foundation.mjs validate --strict
 ```
 
-`plan`은 생성 예정 파일, 충돌과 현재 상태에 묶인 SHA를 출력한다. `apply`는 프로젝트 상태와 SHA가 모두 같을 때만 실행되며 기존 파일 충돌이 있으면 아무것도 변경하지 않는다. Custom 프로젝트의 test, build, start와 dependency audit 명령은 프로젝트가 작성한 설정을 계속 소유한다.
+`adopt plan`은 기존 PHP 구조, Composer·npm lockfile, page·asset entry, Dockerfile과 workflow 충돌을 조사한다. 충돌 파일은 자동 덮어쓰지 않는다. 계획 후 파일 상태가 하나라도 달라지면 SHA가 무효화된다.
 
-## 프로필
+## 페이지 추가
 
-- `core`: 규칙, 검증·업데이트 CLI, 에이전트 연결
-- `github`: stable Actions checks, PR 템플릿, Dependabot과 원격 설정 계획
-- `docker`: Compose·Make·Docker 보안 및 최적화 계약
-- `node`: npm lockfile과 완성형 Node Docker 어댑터
-- `typescript`: strict TypeScript와 타입 단일 소유권
-- `scss`: Sass module system과 기존 토큰·변수·Mixin 재사용
-- `custom`: 기존 언어·명령·Dockerfile을 공통 자동화에 연결하는 어댑터
+서버 동작이 없는 페이지는 전용 Controller를 만들지 않는다.
 
-Docker는 TypeScript에 의존하지 않는다. Node와 Custom은 동시에 활성화할 수 없다.
+```text
+node scripts/foundation.mjs page add sub-1 --path /sub-1 --title "Sub 1" --scss --typescript
+node scripts/foundation.mjs validate --strict
+node scripts/foundation.mjs architecture render
+```
+
+페이지 ID `sub-1`의 선택 파일은 다음과 같다.
+
+```text
+resource/views/pages/sub-1.php
+resource/scss/pages/sub-1.scss   # --scss일 때만
+resource/ts/pages/sub-1.ts       # --typescript일 때만
+```
+
+`config/pages.php`가 route, View와 asset entry의 단일 runtime 원본이다.
+
+## Capability 추가
+
+```text
+node scripts/foundation.mjs capability plan three
+node scripts/foundation.mjs capability apply three --plan-sha <sha256> --confirm three
+```
+
+초기 catalog는 publishing, form, auth, admin-ui, api, mysql, upload, payment, mail, cache, queue, search, i18n, cms, three, motion, analytics, seo를 제공한다. 각 항목은 trigger, requires, conflicts, 추가 파일, 의존성, 보안·성능·테스트·제거 조건을 가진다.
+
+catalog에 없는 요구는 자동으로 비슷한 기능에 끼워 맞추지 않는다. `unknown capability`로 보고하고 공식 출처, 후보 구조, 파일 증가량과 테스트를 승인받은 뒤 catalog를 확장한다.
+
+## PHP·View·HTML
+
+MVC는 HTTP 표현 경계에만 적용한다. Symfony HttpFoundation과 Routing component를 사용하며 Foundation 전용 Router·Request·Response·service locator를 만들지 않는다.
+
+기본 section shell은 다음 순서를 사용하되 내용이 없는 요소는 출력하지 않는다.
+
+```text
+section
+└─ container
+   └─ inner
+      ├─ section-header (optional)
+      │  ├─ eyebrow (optional)
+      │  ├─ section-title (optional)
+      │  └─ section-body (optional)
+      └─ section-contents
+         └─ reusable components or page content
+```
+
+View는 전달된 표시 데이터만 렌더링한다. DB·외부 API·권한 결정·상태 변경은 View에서 금지하며 동적 값은 문맥에 맞게 escape한다.
+
+## SCSS·TypeScript·Vite
+
+`resource/scss/main.scss`는 공통 module을 `@use`로 조립만 하며 selector 구현을 두지 않는다. abstract·base·components·layouts·pages 폴더는 실제 첫 책임 파일이 생길 때만 만든다. 페이지 SCSS는 main이나 다른 페이지 entry를 import하지 않는다.
+
+TypeScript는 공통 초기화, 페이지 entry, 독립 수명주기 feature로만 나눈다. listener·observer·RAF·animation·WebGL 자원을 만드는 feature는 mount와 destroy를 함께 제공한다. Three.js의 KTX2·DRACO loader는 실제 압축 asset이 있을 때만 활성화한다.
+
+Vite는 PHP가 HTML을 렌더링하는 backend integration으로 사용한다. 개발 중에는 승인된 Vite origin을 사용하고 production에서는 `public/build/.vite/manifest.json`에서 해시 asset을 해석한다.
 
 ## 공개 CLI
 
 ```text
-foundation.mjs init --runtime node|custom [--profile ...] [--project-name ...] [--owner ...]
-foundation.mjs adopt plan --runtime custom [--profile ...] [--owner ...]
-foundation.mjs adopt apply --plan-sha <sha256> --confirm
+foundation.mjs init [--profile ...] [--project-name ...] [--owner ...]
+foundation.mjs adopt plan|apply
+foundation.mjs page add <slug> --path <path> --title <title> [--scss] [--typescript]
+foundation.mjs capability list|plan|apply
+foundation.mjs architecture render
 foundation.mjs validate [--strict]
 foundation.mjs verify [--base <ref>] [--scope all|policy|project|dependency]
+foundation.mjs evidence add --status <status> --statement <text> [--source-file <path>|--source-url <url>]
+foundation.mjs evidence audit
+foundation.mjs container verify|image|config
 foundation.mjs run <configured-command>
 foundation.mjs doctor
 foundation.mjs update [--version <version>]
@@ -62,30 +147,35 @@ foundation.mjs github plan --repo <owner/name>
 foundation.mjs github apply --repo <owner/name> --confirm <owner/name>
 ```
 
-원격 적용은 visibility를 보존한다. Foundation 저장소를 공개로 바꾸는 별도 작업처럼 공개 전환이 명시된 경우에만 `--make-public`을 추가한다.
+원격 visibility는 보존한다. Foundation 저장소 공개 전환처럼 사용자가 정확한 저장소를 승인한 경우에만 별도 `--make-public`을 사용한다.
 
-## 규칙과 설정 소유권
+## 문서와 설정 소유권
 
 - [FOUNDATION.md](FOUNDATION.md): 공통 규칙 본문의 유일한 원본
-- [PROJECT.md](PROJECT.md): 프로젝트의 서술형 결정, 아키텍처, 예외, 성능 예산
-- `.foundation/project.json`: 셸 문자열이 아닌 command/args, runtime, Docker, GitHub 실행 설정
-- [SOURCES.json](SOURCES.json): 공식 출처와 재확인 날짜
-- `.foundation/manifest.json`: 설치 버전, 활성 프로필, 관리 파일 SHA-256
-- `AGENTS.md`, `CLAUDE.md`, Cursor Rule: 원본을 복제하지 않는 에이전트 어댑터
+- [PROJECT.md](PROJECT.md): 프로젝트 Intake, 결정, 예외, 예산
+- `.foundation/project.json`: 실행 명령, Page·Capability 상태, Docker·GitHub 설정
+- `.foundation/capabilities.json`: 선택 기능 catalog
+- `.foundation/recipes/*.json`: 다섯 개 영역의 분석 질문과 규칙 인덱스
+- [SOURCES.json](SOURCES.json): 공식 출처와 확인 날짜
+- `.foundation/manifest.json`: 설치 버전, 파일 소유권, managed SHA-256
+- `ARCHITECTURE.md`: 실제 설정에서 생성되는 읽기 전용 구조·UML 인덱스
+- `AGENTS.md`, `CLAUDE.md`, Cursor Rule: 원본을 복제하지 않는 adapter
 
-규칙 우선순위는 시스템·도구 보안 정책, 현재 사용자 요청, 프로젝트 규칙, Foundation 기본값 순서다. 모든 MUST는 validator, Hook, CI, GitHub 또는 판단 증거 중 강제 수단을 가진다.
+`ARCHITECTURE.md`를 직접 편집하지 않는다. `architecture render`가 실제 page, Capability, 의존성에서 다시 생성하고 drift를 검출한다.
 
 ## Codex → Cursor → Claude
 
-Codex는 짧은 `AGENTS.md`, `.agents/skills`, 신뢰된 `.codex/hooks.json`을 사용한다. `SessionStart`는 활성 계약을 context로 추가하고 `Stop`은 변경이 있을 때 verify를 한 번 재요청한다. 프로젝트 Hook은 사용자가 `/hooks`에서 신뢰해야 하며 비활성 환경에서는 CI가 최종 차단한다.
+Codex는 짧은 `AGENTS.md`, `.agents/skills`, 신뢰된 `.codex/hooks.json`을 사용한다. SessionStart는 시작·재개·clear·compact 때 현재 Intake와 Capability를 주입한다. PreToolUse는 저장소 탈출·파괴 명령·승인되지 않은 구조 생성을 조기 차단하고 Stop은 verify 실패 시 한 번만 작업을 계속시킨다. Hook은 완전한 강제 계층이 아니므로 CI가 최종 차단한다.
 
-Cursor는 루트·하위 `AGENTS.md`, `.agents/skills`, Always Apply Rule의 `@FOUNDATION.md`와 `@PROJECT.md` 참조를 사용한다. Cursor Inline Edit에는 Rules가 적용되지 않는 공식 제약이 있으므로 결과는 CI에서 다시 검사한다.
-
-Claude는 `CLAUDE.md`가 `AGENTS.md`, `FOUNDATION.md`, `PROJECT.md`를 명시적으로 import하고 Skill wrapper가 `.agents/skills` 원본으로 라우팅한다.
+Cursor는 `AGENTS.md`, `.agents/skills`, Always Apply Rule의 `@FOUNDATION.md`와 `@PROJECT.md`를 사용한다. Claude는 `CLAUDE.md`가 세 문서를 import하고 Skill wrapper가 `.agents/skills` 원본으로 라우팅한다.
 
 ## Docker와 Make
 
-`compose.yaml`만 표준 파일명으로 사용한다. Node Dockerfile은 dependency, build, test, development, production 단계를 제공하고 base image tag+digest, cache mount, non-root production과 healthcheck를 검사한다. Custom은 기존 Dockerfile target과 `.foundation/project.json` 계약을 대조한다.
+Docker는 Composer dependency, asset, PHP test, PHP development, PHP production, Nginx production stage를 분리한다. base는 tag와 digest를 함께 고정하고 production은 non-root·OPcache·healthcheck·최소 산출물을 사용한다.
+
+`node scripts/foundation.mjs container verify`는 build check와 세 production target을 검증한 뒤 임시 project name과 임시 host port로 Compose를 기동한다. health·페이지·해시 asset·immutable cache·non-root를 확인하고 검증용 컨테이너와 네트워크를 자동 제거한다.
+
+Compose 기본 서비스는 `web`, `php`다. Vite 개발 서버가 필요하면 호스트에서 `npm run dev`를 실행하고 승인된 localhost origin만 PHP에 전달한다. MySQL·Redis는 활성 Capability가 있을 때만 추가한다. 기본 `down`은 volume·image·데이터를 삭제하지 않는다.
 
 ```text
 make help
@@ -103,11 +193,11 @@ make ps
 make release-check
 ```
 
-Makefile은 Node CLI, 프로젝트 command/args와 Docker Compose를 연결하는 편의 계층이다. 기본 down은 volume, image, 데이터를 삭제하지 않는다.
+GNU Make가 없어도 Node·Composer·npm·Docker Compose 원본 명령으로 같은 작업을 실행할 수 있다.
 
 ## GitHub 강제 계층
 
-필수 검사 이름은 런타임·Node 버전과 무관하게 고정된다.
+required check 이름은 런타임·버전과 무관하게 고정한다.
 
 ```text
 foundation-policy
@@ -116,33 +206,22 @@ container
 dependency-gate
 ```
 
-Dependency Review가 가능한 공개 저장소 또는 적격 private 저장소에서는 공식 Action을 사용한다. 사용할 수 없는 private 저장소는 `.foundation/project.json`의 `dependencyAudit`을 실행하고 제한 사항을 보고한다.
+PR에는 적용 PF 규칙, 새 파일 책임, 의존성 검토, 실제 검증 결과, 생략 검사와 남은 위험을 기록한다. Actions는 전체 commit SHA, 최소 token permission, timeout, concurrency를 사용하며 `pull_request_target`과 PR secret을 금지한다.
 
-브랜치는 `(feature|fix|security|docs|refactor|test|chore|release)/<lowercase-topic>`, PR 제목은 Conventional Commit 형식을 사용한다. 신규 경로와 의존성 변경은 PR에 책임·대안·보안·비용 증거를 남긴다.
-
-## 업데이트와 검증
+## 업데이트와 릴리스
 
 ```text
 node scripts/foundation.mjs update --version 1.0.1
 node scripts/foundation.mjs verify --base origin/main
 ```
 
-업데이트는 정식 Release 자산과 SHA-256을 검증한다. 관리 파일이 하나라도 수정됐으면 전체를 중단하고 `PROJECT.md`, `.foundation/project.json`, CODEOWNERS와 다른 seed 파일을 덮어쓰지 않는다.
+업데이트는 정식 Release 자산, 경로, 크기, 버전과 SHA-256을 검증한다. managed 파일이 수정됐으면 다운로드 전에 전체를 중단하고 `PROJECT.md`, `.foundation/project.json`, Page·Capability 설정과 다른 seed 파일을 덮어쓰지 않는다.
 
-Foundation 자체 검증:
-
-```text
-npm ci
-npm test
-node scripts/foundation.mjs verify --base origin/main
-docker buildx build --check .
-docker compose config -q
-docker build --target production -t project-foundation:local .
-```
+v1.0.0 릴리스는 12개 그룹의 canonical scenario 120개, mutation 검사, PHP 8.4·8.5, Docker build·health, agent adapter, GitHub ruleset과 31일 이내 공식 출처를 모두 증명해야 한다.
 
 ## 공식 기준
 
-외부 동작은 [SOURCES.json](SOURCES.json)의 공급자 공식 문서만 근거로 한다. SOLID, 파일 생성 게이트, 객체 책임과 최적화 판단은 `Project Foundation Policy`로 구분한다. 출처가 31일 넘게 재확인되지 않으면 strict 검증과 릴리스를 차단한다.
+외부 동작은 [SOURCES.json](SOURCES.json)의 공급자 공식 문서만 근거로 한다. SOLID, 파일 생성 게이트, 최소 MVC, Capability와 Evidence 절차는 `Project Foundation Policy`로 구분한다.
 
 ## 라이선스
 

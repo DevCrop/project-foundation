@@ -1,7 +1,7 @@
 {
   "name": "project-foundation",
   "version": "1.0.0",
-  "description": "Reusable project rules, validation, agent integration, and automation foundation",
+  "description": "Evidence-based PHP site starter, project rules, validation, and automation",
   "private": false,
   "type": "module",
   "license": "MIT",
@@ -13,10 +13,10 @@
     "@parcel/watcher@2.6.0": true
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && npm run styles:build",
+    "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "styles:build": "sass --no-source-map styles/main.scss dist/styles.css",
-    "start": "node dist/main.js",
+    "dev": "vite",
+    "styles:build": "vite build",
     "test": "node --test scripts/foundation.test.mjs",
     "validate": "node scripts/foundation.mjs validate --strict",
     "doctor": "node scripts/foundation.mjs doctor",
@@ -25,7 +25,8 @@
   "dependencies": {},
   "devDependencies": {
     "@types/node": "24.13.3",
-    "sass": "1.103.0",
-    "typescript": "7.0.2"
+    "sass": "1.103.1",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
   }
 }

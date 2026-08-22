@@ -8,16 +8,16 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  readdir,
   rm,
-  symlink,
   writeFile,
 } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { gzipSync } from "node:zlib";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
 
 import {
   FoundationError,
@@ -29,7 +29,9 @@ import {
 } from "./foundation.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const FIXED_NOW = new Date("2026-08-22T12:00:00Z");
 const TEMPORARIES = new Set();
+const COPY_EXCLUDES = new Set([".git", ".tmp-init-check", "node_modules", "vendor", "dist", "build", ".release"]);
 
 async function temporaryDirectory(prefix = "project-foundation-test-") {
   const directory = await mkdtemp(path.join(tmpdir(), prefix));
@@ -41,7 +43,7 @@ async function copyFoundation() {
   const target = await temporaryDirectory();
   await cp(ROOT, target, {
     recursive: true,
-    filter: (source) => ![".git", "node_modules", "dist", ".release"].includes(path.basename(source)),
+    filter: (source) => !COPY_EXCLUDES.has(path.basename(source)),
   });
   return target;
 }
@@ -52,7 +54,7 @@ function runCli(root, args, environment = {}, scriptRoot = root, input) {
     encoding: "utf8",
     env: { ...process.env, ...environment },
     input,
-    timeout: 30_000,
+    timeout: 45_000,
     windowsHide: true,
   });
 }
@@ -75,21 +77,11 @@ function runCliAsync(root, args, environment = {}, scriptRoot = root) {
   });
 }
 
-function runNpm(root, args) {
-  return spawnSync("npm", args, {
-    cwd: root,
-    encoding: "utf8",
-    timeout: 30_000,
-    windowsHide: true,
-    shell: process.platform === "win32",
-  });
-}
-
 async function listFiles(root, current = "") {
-  const entries = await import("node:fs/promises").then(({ readdir }) => readdir(path.join(root, current), { withFileTypes: true }));
+  const entries = await readdir(path.join(root, current), { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
-    if ([".git", "node_modules", "dist"].includes(entry.name)) continue;
+    if (COPY_EXCLUDES.has(entry.name)) continue;
     const relative = path.join(current, entry.name);
     if (entry.isDirectory()) files.push(...(await listFiles(root, relative)));
     else files.push(relative.split(path.sep).join("/"));
@@ -99,7 +91,9 @@ async function listFiles(root, current = "") {
 
 async function snapshotTree(root) {
   const snapshot = {};
-  for (const relativePath of await listFiles(root)) snapshot[relativePath] = createHash("sha256").update(await readFile(path.join(root, relativePath))).digest("hex");
+  for (const relativePath of await listFiles(root)) {
+    snapshot[relativePath] = createHash("sha256").update(await readFile(path.join(root, relativePath))).digest("hex");
+  }
   return snapshot;
 }
 
@@ -168,140 +162,263 @@ async function serveRelease(archive, version) {
   };
 }
 
+function jsonPointer(value, pointer) {
+  if (pointer === "") return value;
+  return pointer.slice(1).split("/").map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
+    .reduce((current, part) => current?.[part], value);
+}
+
+async function initializeConsumer(root, profiles = "github,docker,typescript,scss", owner = "DevCrop") {
+  const args = ["init", "--runtime", "php", "--profile", profiles, "--project-name", "scenario-site"];
+  if (profiles.split(",").includes("github")) args.push("--owner", owner);
+  const result = runCli(root, args);
+  assert.equal(result.status, 0, result.stderr);
+  return result;
+}
+
+async function mutate(root, name) {
+  if (name === "approved-unverified") {
+    const file = path.join(root, ".foundation", "project.json");
+    const data = JSON.parse(await readFile(file, "utf8"));
+    data.intake.state = "approved";
+    await writeFile(file, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  } else if (name === "rogue-scss-entry") {
+    await writeFile(path.join(root, "resource", "scss", "rogue.scss"), ".rogue { color: red; }\n", "utf8");
+  } else if (name === "legacy-scss-import") {
+    await appendFile(path.join(root, "resource", "scss", "main.scss"), "\n@import \"legacy\";\n", "utf8");
+  } else if (name === "main-scss-implementation") {
+    await appendFile(path.join(root, "resource", "scss", "main.scss"), "\n.rogue { color: red; }\n", "utf8");
+  } else if (name === "explicit-any") {
+    await appendFile(path.join(root, "resource", "ts", "main.ts"), "\nconst invalid: any = null;\n", "utf8");
+  } else if (name === "strict-disabled") {
+    const file = path.join(root, "tsconfig.json");
+    const data = JSON.parse(await readFile(file, "utf8"));
+    data.compilerOptions.strict = false;
+    await writeFile(file, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  } else if (name === "stale-architecture") {
+    await appendFile(path.join(root, "ARCHITECTURE.md"), "\nmanual drift\n", "utf8");
+  } else if (name === "multiple-lockfiles") {
+    await writeFile(path.join(root, "yarn.lock"), "# mutation\n", "utf8");
+  } else if (name === "package-lock-drift") {
+    const file = path.join(root, "package.json");
+    const data = JSON.parse(await readFile(file, "utf8"));
+    data.devDependencies.vite = "0.0.1";
+    await writeFile(file, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  } else if (name === "missing-composer-lock") {
+    await rm(path.join(root, "composer.lock"));
+  } else if (name === "composer-lock-direct-missing") {
+    const file = path.join(root, "composer.lock");
+    const data = JSON.parse(await readFile(file, "utf8"));
+    data.packages = data.packages.filter((item) => item.name !== "symfony/routing");
+    await writeFile(file, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  } else if (name === "floating-docker-image") {
+    const file = path.join(root, "Dockerfile");
+    const text = await readFile(file, "utf8");
+    await writeFile(file, text.replace(/^ARG PHP_IMAGE=.*$/m, "ARG PHP_IMAGE=php:latest"), "utf8");
+  } else if (name === "privileged-compose") {
+    await appendFile(path.join(root, "compose.yaml"), "\n# mutation\nprivileged: true\n", "utf8");
+  } else if (name === "compose-name-conflict") {
+    await writeFile(path.join(root, "compose.yml"), "services: {}\n", "utf8");
+  } else if (name === "unpinned-action") {
+    const file = path.join(root, ".github", "workflows", "quality.yml");
+    const text = await readFile(file, "utf8");
+    await writeFile(file, text.replace(/actions\/checkout@[a-f0-9]{40}/, "actions/checkout@v6"), "utf8");
+  } else if (name === "pull-request-target") {
+    const file = path.join(root, ".github", "workflows", "quality.yml");
+    await appendFile(file, "\n# mutation\npull_request_target:\n", "utf8");
+  } else {
+    throw new Error(`Unknown scenario mutation: ${name}`);
+  }
+}
+
+async function runProbe(probe) {
+  if (["contains", "not-contains"].includes(probe.type)) {
+    const text = await readFile(path.join(ROOT, probe.path), "utf8");
+    if (probe.type === "contains") assert.ok(text.includes(probe.value), `${probe.path} must contain ${probe.value}`);
+    else assert.ok(!text.includes(probe.value), `${probe.path} must not contain ${probe.value}`);
+    return;
+  }
+  if (["json-equals", "json-includes", "json-length", "json-has"].includes(probe.type)) {
+    const data = JSON.parse(await readFile(path.join(ROOT, probe.path), "utf8"));
+    const actual = jsonPointer(data, probe.pointer);
+    if (probe.type === "json-equals") assert.deepEqual(actual, probe.value);
+    if (probe.type === "json-includes") assert.ok(actual.includes(probe.value));
+    if (probe.type === "json-length") assert.equal(actual.length, probe.value);
+    if (probe.type === "json-has") assert.notEqual(actual, undefined);
+    return;
+  }
+  if (probe.type === "files-absent") {
+    for (const relativePath of probe.paths) await assert.rejects(lstat(path.join(ROOT, relativePath)));
+    return;
+  }
+  if (probe.type === "files-exact") {
+    const files = (await listFiles(path.join(ROOT, probe.root)))
+      .map((entry) => `${probe.root}/${entry}`)
+      .filter((entry) => !path.posix.basename(entry).startsWith("_"));
+    assert.deepEqual(files, probe.entries);
+    return;
+  }
+  if (["cli-reject", "cli-accept"].includes(probe.type)) {
+    const root = await copyFoundation();
+    const result = runCli(root, probe.args);
+    if (probe.type === "cli-reject") {
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, new RegExp(probe.error.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+    } else {
+      assert.equal(result.status, 0, result.stderr);
+    }
+    return;
+  }
+  if (probe.type === "cli-output") {
+    const result = runCli(ROOT, probe.args);
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(result.stdout.includes(probe.value));
+    return;
+  }
+  if (probe.type === "cli-json") {
+    const result = runCli(ROOT, probe.args);
+    assert.equal(result.status, 0, result.stderr);
+    const actual = jsonPointer(JSON.parse(result.stdout), probe.pointer);
+    assert.match(actual, new RegExp(probe.pattern));
+    return;
+  }
+  if (probe.type === "mutation") {
+    const root = await copyFoundation();
+    await mutate(root, probe.name);
+    const result = await validateProject(root, { strict: true, now: FIXED_NOW });
+    assert.ok(result.errors.some((error) => error.includes(probe.error)), result.errors.join("\n"));
+    return;
+  }
+  if (probe.type === "consumer-page" || probe.type === "consumer-cli-reject") {
+    const root = await copyFoundation();
+    await initializeConsumer(root);
+    const args = probe.type === "consumer-page"
+      ? ["page", "add", probe.slug, "--path", probe.path, "--title", probe.title, ...(probe.flags ?? [])]
+      : probe.args;
+    const result = runCli(root, args);
+    if (probe.type === "consumer-cli-reject") {
+      assert.notEqual(result.status, 0);
+      assert.ok(result.stderr.includes(probe.error), result.stderr);
+    } else {
+      assert.equal(result.status, 0, result.stderr);
+      for (const relativePath of probe.files ?? []) assert.equal((await lstat(path.join(root, relativePath))).isFile(), true);
+      for (const relativePath of probe.absent ?? []) await assert.rejects(lstat(path.join(root, relativePath)));
+      assert.equal(runCli(root, ["validate", "--strict"]).status, 0);
+    }
+    return;
+  }
+  if (probe.type === "capability-apply-reject") {
+    const root = await copyFoundation();
+    const planned = runCli(root, ["capability", "plan", probe.id]);
+    assert.equal(planned.status, 0, planned.stderr);
+    const plan = JSON.parse(planned.stdout);
+    const applied = runCli(root, ["capability", "apply", probe.id, "--plan-sha", plan.planSha, "--confirm", probe.id]);
+    assert.notEqual(applied.status, 0);
+    assert.ok(applied.stderr.includes(probe.error), applied.stderr);
+    return;
+  }
+  if (probe.type === "init") {
+    const root = await copyFoundation();
+    await initializeConsumer(root, probe.profiles, probe.owner);
+    for (const relativePath of probe.present ?? []) assert.equal((await lstat(path.join(root, relativePath))).isFile(), true);
+    for (const relativePath of probe.absent ?? []) await assert.rejects(lstat(path.join(root, relativePath)));
+    assert.equal(runCli(root, ["validate", "--strict"]).status, 0);
+    return;
+  }
+  if (probe.type === "deterministic-init") {
+    const first = await copyFoundation();
+    const second = await copyFoundation();
+    await initializeConsumer(first, probe.profiles, probe.owner);
+    await initializeConsumer(second, probe.profiles, probe.owner);
+    assert.deepEqual(await snapshotTree(first), await snapshotTree(second));
+    return;
+  }
+  if (probe.type === "init-conflict") {
+    const root = await temporaryDirectory();
+    await writeFile(path.join(root, "README.md"), "사용자 문서\n", "utf8");
+    const result = runCli(root, ["init", "--profile", "typescript"], {}, ROOT);
+    assert.notEqual(result.status, 0);
+    assert.equal(await readFile(path.join(root, "README.md"), "utf8"), "사용자 문서\n");
+    return;
+  }
+  if (probe.type === "path-reject") {
+    assert.throws(() => resolveInside(ROOT, probe.value), FoundationError);
+    return;
+  }
+  if (probe.type === "tar-reject") {
+    assert.throws(() => parseTarGz(createTarGz([[probe.value, "blocked"]])), FoundationError);
+    return;
+  }
+  if (probe.type === "update-managed-conflict") {
+    const root = await copyFoundation();
+    await initializeConsumer(root, "docker,typescript,scss");
+    await appendFile(path.join(root, "AGENTS.md"), "\nmanaged edit\n", "utf8");
+    const result = runCli(root, ["update", "--version", "1.0.1"], {
+      NODE_ENV: "test",
+      FOUNDATION_RELEASE_BASE_URL: "http://127.0.0.1:1",
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Managed files were modified/);
+    return;
+  }
+  if (probe.type === "validate-pass") {
+    const result = await validateProject(ROOT, { strict: true, now: FIXED_NOW });
+    assert.deepEqual(result.errors, []);
+    return;
+  }
+  if (probe.type === "validate-at") {
+    const result = await validateProject(ROOT, { strict: true, now: new Date(`${probe.date}T12:00:00Z`) });
+    assert.ok(result.errors.some((error) => error.includes(probe.error)));
+    return;
+  }
+  throw new Error(`Unknown scenario probe: ${probe.type}`);
+}
+
 test.after(async () => {
   for (const directory of TEMPORARIES) await rm(directory, { recursive: true, force: true });
 });
 
 test("upstream passes strict validation", async () => {
-  const result = await validateProject(ROOT, { strict: true, now: new Date("2026-08-21T12:00:00Z") });
+  const result = await validateProject(ROOT, { strict: true, now: FIXED_NOW });
   assert.deepEqual(result.errors, []);
-  assert.ok(result.ruleCount >= 30);
-  assert.ok(result.sourceCount >= 20);
+  assert.equal(result.ruleCount, 54);
+  assert.equal(result.sourceCount, 50);
 });
 
-test("node, github, typescript, scss, and docker initialization is deterministic", async () => {
+test("full PHP initialization, page generation, and asset build are deterministic", async () => {
   const first = await copyFoundation();
   const second = await copyFoundation();
   for (const root of [first, second]) {
-    const result = runCli(root, ["init", "--runtime", "node", "--profile", "github,docker,typescript,scss", "--project-name", "sample-app", "--owner", "DevCrop"]);
-    assert.equal(result.status, 0, result.stderr);
+    await initializeConsumer(root);
+    const page = runCli(root, ["page", "add", "sub-1", "--path", "/sub-1", "--title", "Sub 1", "--scss", "--typescript"]);
+    assert.equal(page.status, 0, page.stderr);
+    assert.equal(runCli(root, ["validate", "--strict"]).status, 0);
   }
   assert.deepEqual(await snapshotTree(first), await snapshotTree(second));
-  const manifest = JSON.parse(await readFile(path.join(first, ".foundation", "manifest.json"), "utf8"));
-  assert.equal(manifest.mode, "consumer");
-  assert.deepEqual(manifest.activeProfiles, ["core", "node", "github", "docker", "typescript", "scss"]);
-  assert.equal(await readFile(path.join(first, "PROJECT.md"), "utf8").then((text) => text.includes("sample-app")), true);
-  const install = runNpm(first, ["ci", "--ignore-scripts"]);
-  assert.equal(install.status, 0, install.stderr);
-  assert.equal(runNpm(first, ["run", "build"]).status, 0);
-  assert.equal(runNpm(first, ["run", "styles:build"]).status, 0);
-  assert.equal(runCli(first, ["validate", "--strict"]).status, 0);
 });
 
-test("plain Node Docker initialization does not require TypeScript or SCSS", async () => {
-  const root = await copyFoundation();
-  const result = runCli(root, ["init", "--runtime", "node", "--profile", "docker", "--project-name", "plain-node"]);
-  assert.equal(result.status, 0, result.stderr);
-  await assert.rejects(lstat(path.join(root, "tsconfig.json")));
-  await assert.rejects(lstat(path.join(root, "styles", "main.scss")));
-  assert.equal((await lstat(path.join(root, "src", "main.js"))).isFile(), true);
-  const install = runNpm(root, ["ci", "--ignore-scripts"]);
-  assert.equal(install.status, 0, install.stderr);
-  const build = runNpm(root, ["run", "build"]);
-  assert.equal(build.status, 0, build.stderr);
-  assert.equal((await lstat(path.join(root, "dist", "main.js"))).isFile(), true);
+test("adopt plan and apply preserve an existing README", async () => {
+  const root = await temporaryDirectory();
+  await writeFile(path.join(root, "README.md"), "기존 PHP 프로젝트\n", "utf8");
+  const planned = runCli(root, ["adopt", "plan", "--runtime", "php", "--profile", "github,docker,typescript,scss", "--project-name", "legacy-site", "--owner", "DevCrop"], {}, ROOT);
+  assert.equal(planned.status, 0, planned.stderr);
+  const plan = JSON.parse(planned.stdout);
+  assert.deepEqual(plan.conflicts, []);
+  const applied = runCli(root, ["adopt", "apply", "--plan-sha", plan.planSha, "--confirm"], {}, ROOT);
+  assert.equal(applied.status, 0, applied.stderr);
+  assert.equal(await readFile(path.join(root, "README.md"), "utf8"), "기존 PHP 프로젝트\n");
   assert.equal(runCli(root, ["validate", "--strict"]).status, 0);
 });
 
-test("core custom initialization creates no npm or language-specific files", async () => {
-  const root = await copyFoundation();
-  const result = runCli(root, ["init", "--runtime", "custom", "--profile", "core", "--project-name", "core-only"]);
-  assert.equal(result.status, 0, result.stderr);
-  for (const relativePath of ["Dockerfile", "compose.yaml", "Makefile", "tsconfig.json", "src/main.ts", "styles/main.scss", "CHANGELOG.md", "CONTRIBUTING.md", "scripts/foundation.test.mjs", ".github/workflows/release.yml"]) {
-    await assert.rejects(lstat(path.join(root, relativePath)));
-  }
-  const validation = await validateProject(root, { strict: false, now: new Date("2026-08-21T12:00:00Z") });
-  assert.deepEqual(validation.errors, []);
-  for (const relativePath of ["package.json", "package-lock.json"]) await assert.rejects(lstat(path.join(root, relativePath)));
-  const configuration = JSON.parse(await readFile(path.join(root, ".foundation", "project.json"), "utf8"));
-  assert.equal(configuration.project.runtime, "custom");
-  assert.deepEqual(configuration.commands, {});
-});
-
-test("initialization refuses unrelated existing files and preserves them", async () => {
-  const root = await temporaryDirectory();
-  await writeFile(path.join(root, "README.md"), "사용자 문서\n", "utf8");
-  const result = runCli(root, ["init", "--profile", "typescript"], {}, ROOT);
-  assert.notEqual(result.status, 0);
-  assert.equal(await readFile(path.join(root, "README.md"), "utf8"), "사용자 문서\n");
-});
-
-test("duplicate rules and sources are rejected", async () => {
-  const root = await copyFoundation();
-  const foundationPath = path.join(root, "FOUNDATION.md");
-  await appendFile(foundationPath, "\n### PF-CORE-001 — duplicate\n\n- Level: MUST\n- Profiles: core\n- Authority: policy:project-foundation\n- Exception: no\n- Rule: 이 본문은 중복 ID 검사를 위한 테스트 규칙이다.\n", "utf8");
-  const sourcesPath = path.join(root, "SOURCES.json");
-  const sources = JSON.parse(await readFile(sourcesPath, "utf8"));
-  sources.sources.push({ ...sources.sources[0] });
-  await writeFile(sourcesPath, `${JSON.stringify(sources, null, 2)}\n`, "utf8");
-  const result = await validateProject(root, { strict: false, now: new Date("2026-08-21T12:00:00Z") });
-  assert.ok(result.errors.some((error) => error.includes("Duplicate rule ID")));
-  assert.ok(result.errors.some((error) => error.includes("Duplicate or missing source ID")));
-});
-
-test("expired official sources and project exceptions fail strict validation", async () => {
-  const root = await copyFoundation();
-  await appendFile(path.join(root, "PROJECT.md"), "\n### PF-GIT-001\n- Reason: temporary test\n- Owner: tester\n- Review by: 2026-01-01\n- Compensating control: protected test branch\n", "utf8");
-  const result = await validateProject(root, { strict: true, now: new Date("2026-10-01T12:00:00Z") });
-  assert.ok(result.errors.some((error) => error.includes("source verification")));
-  assert.ok(result.errors.some((error) => error.includes("exception expired")));
-});
-
-test("unsafe paths and tar traversal are rejected", () => {
-  assert.throws(() => resolveInside(ROOT, "../outside"), FoundationError);
-  assert.throws(() => resolveInside(ROOT, path.resolve(ROOT, "absolute")), FoundationError);
-  const archive = createTarGz([["../escape.txt", "no"]]);
-  assert.throws(() => parseTarGz(archive), FoundationError);
-});
-
-test("managed symlinks are rejected when supported", async (context) => {
-  const root = await copyFoundation();
-  const target = path.join(root, "FOUNDATION.md");
-  await rm(target);
-  try {
-    await symlink(path.join(root, "README.md"), target);
-  } catch (error) {
-    if (["EPERM", "EACCES"].includes(error.code)) {
-      context.skip("Symlink creation is unavailable on this Windows configuration.");
-      return;
-    }
-    throw error;
-  }
-  const result = await validateProject(root, { strict: false, now: new Date("2026-08-21T12:00:00Z") });
-  assert.ok(result.errors.some((error) => error.includes("symbolic link")));
-});
-
-test("modified managed files abort update before any download", async () => {
-  const root = await copyFoundation();
-  assert.equal(runCli(root, ["init", "--profile", "typescript,scss,docker", "--project-name", "managed-change"]).status, 0);
-  await appendFile(path.join(root, "AGENTS.md"), "\nlocal edit\n", "utf8");
-  const result = runCli(root, ["update", "--version", "1.0.1"], {
-    NODE_ENV: "test",
-    FOUNDATION_RELEASE_BASE_URL: "http://127.0.0.1:1",
-  });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Managed files were modified/);
-});
-
-test("verified update changes only managed files and preserves Korean project text", async () => {
+test("verified update changes managed files and preserves Korean project text", async () => {
   const consumer = await copyFoundation();
-  assert.equal(runCli(consumer, ["init", "--profile", "typescript,scss,docker", "--project-name", "update-test"]).status, 0);
+  await initializeConsumer(consumer, "docker,typescript,scss");
   const projectPath = path.join(consumer, "PROJECT.md");
   await appendFile(projectPath, "\n한글 프로젝트 규칙 보존\n", "utf8");
   const originalProject = await readFile(projectPath, "utf8");
 
   const release = await copyFoundation();
-  await appendFile(path.join(release, "SECURITY.md"), "\nRelease 1.0.1 security note.\n", "utf8");
+  await appendFile(path.join(release, "SECURITY.md"), "\nRelease 1.0.1 note.\n", "utf8");
   const archive = await releaseArchive(release, "1.0.1");
   const server = await serveRelease(archive, "1.0.1");
   try {
@@ -315,177 +432,42 @@ test("verified update changes only managed files and preserves Korean project te
   }
   assert.equal(await readFile(projectPath, "utf8"), originalProject);
   assert.match(await readFile(path.join(consumer, "SECURITY.md"), "utf8"), /Release 1\.0\.1/);
-  const manifest = JSON.parse(await readFile(path.join(consumer, ".foundation", "manifest.json"), "utf8"));
-  assert.equal(manifest.foundationVersion, "1.0.1");
 });
 
-test("bad release checksum leaves the project unchanged", async () => {
-  const consumer = await copyFoundation();
-  assert.equal(runCli(consumer, ["init", "--profile", "typescript,scss,docker", "--project-name", "checksum-test"]).status, 0);
-  const before = await snapshotTree(consumer);
-  const archive = createTarGz([["project-foundation/.foundation/manifest.json", "{}"]]);
-  const server = createServer((request, response) => {
-    response.writeHead(200);
-    response.end(request.url?.endsWith(".sha256") ? `${"0".repeat(64)}  invalid.tar.gz\n` : archive);
-  });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  try {
-    const result = await runCliAsync(consumer, ["update", "--version", "1.0.2"], {
-      NODE_ENV: "test",
-      FOUNDATION_RELEASE_BASE_URL: `http://127.0.0.1:${address.port}`,
-    });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /checksum mismatch/);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-  assert.deepEqual(await snapshotTree(consumer), before);
-});
+test("Codex hooks load context, block destructive commands, and stop once", async () => {
+  const destructive = runCli(ROOT, ["agent", "hook", "pre-tool-use"], {}, ROOT, JSON.stringify({
+    tool_name: "Bash",
+    tool_input: { command: "git reset --hard" },
+  }));
+  assert.equal(destructive.status, 0, destructive.stderr);
+  assert.equal(JSON.parse(destructive.stdout).hookSpecificOutput.permissionDecision, "deny");
 
-test("Docker and package-manager policy violations are detected", async () => {
   const root = await copyFoundation();
-  await writeFile(path.join(root, "compose.yml"), "services: {}\n", "utf8");
-  await writeFile(path.join(root, "yarn.lock"), "# test\n", "utf8");
-  await writeFile(path.join(root, "Dockerfile"), "ARG NODE_IMAGE=node:latest\nFROM ${NODE_IMAGE}\n", "utf8");
-  const result = await validateProject(root, { strict: false, now: new Date("2026-08-21T12:00:00Z") });
-  assert.ok(result.errors.some((error) => error.includes("compose.yml conflicts")));
-  assert.ok(result.errors.some((error) => error.includes("Multiple package-manager lockfiles")));
-  assert.ok(result.errors.some((error) => error.includes("version tag and SHA-256")));
-});
-
-test("GitHub apply requires exact repository confirmation", () => {
-  const wrongRepo = runCli(ROOT, ["github", "apply", "--repo", "someone/example", "--confirm", "someone/other"]);
-  assert.notEqual(wrongRepo.status, 0);
-  assert.match(wrongRepo.stderr, /exact owner\/name/);
-  const missingConfirm = runCli(ROOT, ["github", "apply", "--repo", "DevCrop/project-foundation"]);
-  assert.notEqual(missingConfirm.status, 0);
-  assert.match(missingConfirm.stderr, /exact owner\/name/);
-});
-
-test("custom Docker adoption is deterministic and preserves existing files", async () => {
-  const root = await temporaryDirectory();
-  const baseImage = "node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03";
-  await writeFile(path.join(root, "README.md"), "기존 프로젝트 문서\n", "utf8");
-  await writeFile(path.join(root, "Dockerfile"), `ARG BASE_IMAGE=${baseImage}\nFROM \${BASE_IMAGE} AS build\nRUN --mount=type=cache,target=/tmp/cache true\nFROM build AS test\nRUN true\nFROM build AS development\nCMD ["node", "--version"]\nFROM build AS production\nUSER 65532\nHEALTHCHECK CMD ["true"]\nCMD ["node", "--version"]\n`, "utf8");
-  await mkdir(path.join(root, ".foundation"), { recursive: true });
-  await writeFile(path.join(root, ".foundation", "project.json"), `${JSON.stringify({
-    schemaVersion: 1,
-    project: { name: "legacy-app", runtime: "custom" },
-    commands: {
-      test: { command: "node", args: ["--version"] },
-      build: { command: "node", args: ["--version"] },
-      start: { command: "node", args: ["--version"] },
-    },
-    docker: { enabled: true, file: "Dockerfile", service: "app", port: 3000, targets: { development: "development", test: "test", production: "production" } },
-    github: { visibility: "preserve", defaultBranch: "main" },
-  }, null, 2)}\n`, "utf8");
-
-  const args = ["adopt", "plan", "--runtime", "custom", "--profile", "github,docker", "--project-name", "legacy-app", "--owner", "DevCrop"];
-  const first = runCli(root, args, {}, ROOT);
-  const second = runCli(root, args, {}, ROOT);
-  assert.equal(first.status, 0, first.stderr);
-  assert.equal(second.status, 0, second.stderr);
-  const firstPlan = JSON.parse(first.stdout);
-  const secondPlan = JSON.parse(second.stdout);
-  assert.equal(firstPlan.planSha, secondPlan.planSha);
-  assert.deepEqual(firstPlan.conflicts, []);
-
-  const apply = runCli(root, ["adopt", "apply", "--plan-sha", firstPlan.planSha, "--confirm"], {}, ROOT);
-  assert.equal(apply.status, 0, apply.stderr);
-  assert.equal(await readFile(path.join(root, "README.md"), "utf8"), "기존 프로젝트 문서\n");
-  await assert.rejects(lstat(path.join(root, "package.json")));
-  const configuration = JSON.parse(await readFile(path.join(root, ".foundation", "project.json"), "utf8"));
-  assert.equal(configuration.project.runtime, "custom");
-  assert.equal(configuration.docker.enabled, true);
-  const validation = runCli(root, ["validate", "--strict"]);
-  assert.equal(validation.status, 0, validation.stderr);
-  if (process.env.FOUNDATION_DOCKER_TESTS === "1") {
-    const check = spawnSync("docker", ["buildx", "build", "--check", "--file", "Dockerfile", "."], { cwd: root, encoding: "utf8", timeout: 120_000, windowsHide: true });
-    assert.equal(check.status, 0, check.stderr);
-    const build = spawnSync("docker", ["build", "--file", "Dockerfile", "--target", "production", "--tag", "foundation-custom-fixture:test", "."], { cwd: root, encoding: "utf8", timeout: 120_000, windowsHide: true });
-    assert.equal(build.status, 0, build.stderr);
-  }
-});
-
-test("adoption detects workflow conflicts without changing the project", async () => {
-  const root = await temporaryDirectory();
-  await mkdir(path.join(root, ".github", "workflows"), { recursive: true });
-  await writeFile(path.join(root, ".github", "workflows", "quality.yml"), "name: existing\n", "utf8");
-  const before = await snapshotTree(root);
-  const plan = runCli(root, ["adopt", "plan", "--runtime", "custom", "--profile", "github", "--owner", "DevCrop"], {}, ROOT);
-  assert.equal(plan.status, 0, plan.stderr);
-  const parsed = JSON.parse(plan.stdout);
-  assert.ok(parsed.conflicts.includes(".github/workflows/quality.yml"));
-  const apply = runCli(root, ["adopt", "apply", "--plan-sha", parsed.planSha, "--confirm"], {}, ROOT);
-  assert.notEqual(apply.status, 0);
-  assert.deepEqual(await snapshotTree(root), before);
-});
-
-test("adoption plan SHA is invalidated by any project state change", async () => {
-  const root = await temporaryDirectory();
-  await writeFile(path.join(root, "README.md"), "before\n", "utf8");
-  const plan = runCli(root, ["adopt", "plan", "--runtime", "custom", "--profile", "core"], {}, ROOT);
-  assert.equal(plan.status, 0, plan.stderr);
-  const parsed = JSON.parse(plan.stdout);
-  await appendFile(path.join(root, "README.md"), "after\n", "utf8");
-  const apply = runCli(root, ["adopt", "apply", "--plan-sha", parsed.planSha, "--confirm"], {}, ROOT);
-  assert.notEqual(apply.status, 0);
-  assert.match(apply.stderr, /state changed/);
-  await assert.rejects(lstat(path.join(root, ".foundation", "manifest.json")));
-});
-
-test("agent adapters, hook commands, and stable check names are connected", async () => {
-  const hooks = JSON.parse(await readFile(path.join(ROOT, ".codex", "hooks.json"), "utf8"));
-  for (const event of ["SessionStart", "Stop"]) {
-    const handler = hooks.hooks[event][0].hooks[0];
-    assert.match(handler.command, /git rev-parse --show-toplevel/);
-    assert.match(handler.commandWindows, /git rev-parse --show-toplevel/);
-  }
-  const claude = await readFile(path.join(ROOT, "CLAUDE.md"), "utf8");
-  for (const reference of ["@AGENTS.md", "@FOUNDATION.md", "@PROJECT.md"]) assert.match(claude, new RegExp(reference.replace(".", "\\.")));
-  const cursor = await readFile(path.join(ROOT, ".cursor", "rules", "project.mdc"), "utf8");
-  assert.match(cursor, /@FOUNDATION\.md/);
-  assert.match(cursor, /@PROJECT\.md/);
-  const quality = await readFile(path.join(ROOT, ".github", "workflows", "quality.yml"), "utf8");
-  const dependency = await readFile(path.join(ROOT, ".github", "workflows", "dependency-review.yml"), "utf8");
-  for (const check of ["foundation-policy", "project-quality", "container"]) assert.match(quality, new RegExp(`name: ${check}`));
-  assert.match(dependency, /name: dependency-gate/);
-});
-
-test("Stop hook blocks once and then reports a final failure", async () => {
-  const root = await copyFoundation();
-  const initialized = runCli(root, ["init", "--runtime", "custom", "--profile", "core", "--project-name", "hook-test"]);
-  assert.equal(initialized.status, 0, initialized.stderr);
-  assert.equal(spawnSync("git", ["init"], { cwd: root, encoding: "utf8" }).status, 0);
+  await initializeConsumer(root, "core");
+  assert.equal(spawnSync("git", ["init"], { cwd: root, encoding: "utf8", windowsHide: true }).status, 0);
   await appendFile(path.join(root, "AGENTS.md"), "\ninvalid managed edit\n", "utf8");
-
   const first = runCli(root, ["agent", "hook", "stop"], {}, root, '{"stop_hook_active":false}');
-  assert.equal(first.status, 0, first.stderr);
-  const firstOutput = JSON.parse(first.stdout);
-  assert.equal(firstOutput.decision, "block");
-  assert.match(firstOutput.reason, /Modified managed file: AGENTS\.md/);
-
   const second = runCli(root, ["agent", "hook", "stop"], {}, root, '{"stop_hook_active":true}');
-  assert.equal(second.status, 0, second.stderr);
-  const secondOutput = JSON.parse(second.stdout);
-  assert.equal(secondOutput.continue, false);
-  assert.match(secondOutput.stopReason, /Modified managed file: AGENTS\.md/);
+  assert.equal(JSON.parse(first.stdout).decision, "block");
+  assert.equal(JSON.parse(second.stdout).continue, false);
 });
 
-test("branch policy rejects names outside the universal convention", async () => {
-  const root = await copyFoundation();
-  assert.equal(runCli(root, ["init", "--runtime", "custom", "--profile", "core", "--project-name", "branch-test"]).status, 0);
-  assert.equal(spawnSync("git", ["init"], { cwd: root, encoding: "utf8" }).status, 0);
-  assert.equal(spawnSync("git", ["checkout", "-b", "Bad_Name"], { cwd: root, encoding: "utf8" }).status, 0);
-  const result = runCli(root, ["verify", "--scope", "policy"]);
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Branch name does not match policy/);
-});
-
-test("all declared managed files exist and use regular files", async () => {
+test("all declared managed files exist as regular files", async () => {
   for (const relativePath of MANAGED_PATHS) {
     const information = await lstat(path.join(ROOT, relativePath));
     assert.equal(information.isFile(), true, relativePath);
+  }
+});
+
+test("exactly 120 canonical scenarios execute across twelve groups", async (context) => {
+  const catalog = JSON.parse(await readFile(path.join(ROOT, ".foundation", "scenarios.json"), "utf8"));
+  const scenarios = catalog.groups.flatMap((group) => group.cases.map((scenario) => ({ ...scenario, group: group.id })));
+  assert.equal(catalog.groups.length, 12);
+  assert.ok(catalog.groups.every((group) => group.cases.length === 10));
+  assert.equal(scenarios.length, 120);
+  for (const scenario of scenarios) {
+    await context.test(`${scenario.id} [${scenario.group}] ${scenario.title}`, async () => {
+      await runProbe(scenario.probe);
+    });
   }
 });

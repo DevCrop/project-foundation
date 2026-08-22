@@ -1,11 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"],
-    "outDir": "dist",
-    "rootDir": "src",
+    "noEmit": true,
     "strict": true,
     "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
@@ -13,5 +13,5 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["resource/ts/**/*.ts", "vite.config.ts"]
 }

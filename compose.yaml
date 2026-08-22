@@ -1,18 +1,56 @@
 name: ${COMPOSE_PROJECT_NAME:-project-foundation}
 
 services:
-  app:
+  php:
     build:
       context: .
-      target: development
+      target: php-development
     init: true
     environment:
-      PORT: ${PORT:-3000}
-    ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      APP_ENV: ${APP_ENV:-development}
     read_only: true
     tmpfs:
       - /tmp
+      - /var/run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "php-fpm", "-t"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./bootstrap
+          target: /app/bootstrap
+        - action: sync+restart
+          path: ./config
+          target: /app/config
+        - action: sync+restart
+          path: ./resource/views
+          target: /app/resource/views
+        - action: sync+restart
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: ./composer.lock
+
+  web:
+    build:
+      context: .
+      target: nginx-production
+    depends_on:
+      php:
+        condition: service_healthy
+    ports:
+      - "${PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:uid=101,gid=101,mode=0750
+      - /var/run:uid=101,gid=101,mode=0750
     cap_drop:
       - ALL
     security_opt:
@@ -20,4 +58,6 @@ services:
     develop:
       watch:
         - action: rebuild
-          path: .
+          path: ./package-lock.json
+        - action: rebuild
+          path: ./resource

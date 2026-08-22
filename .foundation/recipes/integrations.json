@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "integrations",
+  "purpose": "외부 API·결제·메일·검색·CMS를 공급자 adapter와 실패 계약으로 격리한다.",
+  "intake": ["provider", "official API contract", "credentials owner", "timeout", "retry and idempotency", "webhook verification"],
+  "decisions": ["synchronous or queued", "SDK or direct HTTP", "domain mapping", "failure and rollback"],
+  "ruleIds": ["PF-SEC-001", "PF-SEC-002", "PF-CAP-001", "PF-INTEGRATION-001", "PF-DEP-002"]
+}

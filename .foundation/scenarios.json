@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "expectedCount": 120,
+  "groups": [
+    {
+      "id": "intake-evidence",
+      "cases": [
+        {"id":"PF-SC-001","title":"Intake vocabulary is documented","ruleIds":["PF-CORE-004","PF-EVIDENCE-001"],"probe":{"type":"contains","path":"README.md","value":"Observed"}},
+        {"id":"PF-SC-002","title":"Twelve intake inputs are listed","ruleIds":["PF-CORE-004"],"probe":{"type":"contains","path":"README.md","value":"12. 기존 프로젝트라면"}},
+        {"id":"PF-SC-003","title":"Upstream intake state is explicit","ruleIds":["PF-CORE-004"],"probe":{"type":"json-equals","path":".foundation/project.json","pointer":"/intake/state","value":"baseline-ready"}},
+        {"id":"PF-SC-004","title":"Observed facts are machine-readable","ruleIds":["PF-EVIDENCE-001"],"probe":{"type":"json-includes","path":".foundation/project.json","pointer":"/intake/observed","value":"PHP renders HTML"}},
+        {"id":"PF-SC-005","title":"Unknown page map remains Unverified","ruleIds":["PF-EVIDENCE-001"],"probe":{"type":"json-includes","path":".foundation/project.json","pointer":"/intake/unverified","value":"consumer page map"}},
+        {"id":"PF-SC-006","title":"Observed evidence without a source is rejected","ruleIds":["PF-EVIDENCE-002"],"probe":{"type":"cli-reject","args":["evidence","add","--status","observed","--statement","missing source"],"error":"requires --source-file or --source-url"}},
+        {"id":"PF-SC-007","title":"Inferred evidence remains distinguishable","ruleIds":["PF-EVIDENCE-001"],"probe":{"type":"cli-accept","args":["evidence","add","--status","inferred","--statement","derived decision"]}},
+        {"id":"PF-SC-008","title":"Unregistered URL cannot prove an observation","ruleIds":["PF-EVIDENCE-002","PF-EVIDENCE-004"],"probe":{"type":"cli-reject","args":["evidence","add","--status","observed","--statement","bad source","--source-url","https://example.com"],"error":"registered official source"}},
+        {"id":"PF-SC-009","title":"Approved intake cannot retain unknowns","ruleIds":["PF-CORE-004"],"probe":{"type":"mutation","name":"approved-unverified","error":"approved intake cannot retain Unverified"}},
+        {"id":"PF-SC-010","title":"Evidence rules are indexed once","ruleIds":["PF-EVIDENCE-003"],"probe":{"type":"contains","path":"FOUNDATION.md","value":"### PF-EVIDENCE-003"}}
+      ]
+    },
+    {
+      "id": "page-html",
+      "cases": [
+        {"id":"PF-SC-011","title":"Page starts with a semantic section","ruleIds":["PF-HTML-001"],"probe":{"type":"contains","path":"resource/views/pages/home.php","value":"<section class=\"section section--hero\""}},
+        {"id":"PF-SC-012","title":"Section owns a container","ruleIds":["PF-HTML-002"],"probe":{"type":"contains","path":"resource/views/pages/home.php","value":"<div class=\"container\">"}},
+        {"id":"PF-SC-013","title":"Container owns one inner boundary","ruleIds":["PF-HTML-002"],"probe":{"type":"contains","path":"resource/views/pages/home.php","value":"<div class=\"inner\">"}},
+        {"id":"PF-SC-014","title":"Header remains optional and composable","ruleIds":["PF-HTML-002"],"probe":{"type":"contains","path":"resource/views/pages/home.php","value":"<header class=\"section-header\">"}},
+        {"id":"PF-SC-015","title":"Eyebrow is supported inside header","ruleIds":["PF-HTML-002"],"probe":{"type":"contains","path":"resource/views/pages/home.php","value":"class=\"eyebrow\""}},
+        {"id":"PF-SC-016","title":"Section title has an accessible owner","ruleIds":["PF-HTML-001","PF-HTML-002"],"probe":{"type":"contains","path":"resource/views/pages/home.php","value":"aria-labelledby=\"home-title\""}},
+        {"id":"PF-SC-017","title":"Section body remains a separate slot","ruleIds":["PF-HTML-002"],"probe":{"type":"contains","path":"resource/views/pages/home.php","value":"class=\"section-body\""}},
+        {"id":"PF-SC-018","title":"Contents is a component assembly boundary","ruleIds":["PF-HTML-002"],"probe":{"type":"contains","path":"resource/views/pages/home.php","value":"class=\"section-contents\""}},
+        {"id":"PF-SC-019","title":"A simple page adds no controller","ruleIds":["PF-HTTP-002","PF-FILE-001"],"probe":{"type":"consumer-page","slug":"sub-1","path":"/sub-1","title":"Sub 1","files":["resource/views/pages/sub-1.php"],"absent":["src/Sub1/Sub1Controller.php"]}},
+        {"id":"PF-SC-020","title":"Invalid page slug is rejected","ruleIds":["PF-HTTP-002"],"probe":{"type":"consumer-cli-reject","args":["page","add","Bad_Page","--path","/bad","--title","Bad"],"error":"lowercase kebab-case"}}
+      ]
+    },
+    {
+      "id": "scss",
+      "cases": [
+        {"id":"PF-SC-021","title":"Global SCSS entry only composes responsibility modules","ruleIds":["PF-SCSS-003","PF-SCSS-004"],"probe":{"type":"contains","path":"resource/scss/main.scss","value":"@use \"layouts/section\";"}},
+        {"id":"PF-SC-022","title":"Main SCSS rejects implementation selectors","ruleIds":["PF-SCSS-003"],"probe":{"type":"mutation","name":"main-scss-implementation","error":"main may only compose modules with @use"}},
+        {"id":"PF-SC-023","title":"Tokens have one owner","ruleIds":["PF-SCSS-001"],"probe":{"type":"contains","path":"resource/scss/abstract/_tokens.scss","value":"$content-width"}},
+        {"id":"PF-SC-024","title":"Base document consumes token API","ruleIds":["PF-SCSS-002"],"probe":{"type":"contains","path":"resource/scss/base/_document.scss","value":"@use \"../abstract/tokens\" as token;"}},
+        {"id":"PF-SC-025","title":"Only main is the initial global entry","ruleIds":["PF-SCSS-003","PF-SCSS-004"],"probe":{"type":"files-exact","root":"resource/scss","entries":["resource/scss/main.scss"]}},
+        {"id":"PF-SC-026","title":"SCSS profile records main entry","ruleIds":["PF-ASSET-001","PF-SCSS-003"],"probe":{"type":"json-includes","path":".foundation/project.json","pointer":"/assets/entries","value":"resource/scss/main.scss"}},
+        {"id":"PF-SC-027","title":"Page SCSS is created only when requested","ruleIds":["PF-SCSS-003","PF-FILE-001"],"probe":{"type":"consumer-page","slug":"styled","path":"/styled","title":"Styled","flags":["--scss"],"files":["resource/views/pages/styled.php","resource/scss/pages/styled.scss"]}},
+        {"id":"PF-SC-028","title":"Rogue SCSS entry is rejected","ruleIds":["PF-SCSS-003"],"probe":{"type":"mutation","name":"rogue-scss-entry","error":"SCSS entry must be main.scss or an approved page entry"}},
+        {"id":"PF-SC-029","title":"Legacy import mutation is rejected","ruleIds":["PF-SCSS-002"],"probe":{"type":"mutation","name":"legacy-scss-import","error":"legacy Sass @import is forbidden"}},
+        {"id":"PF-SC-030","title":"SCSS reuse rule is indexed","ruleIds":["PF-SCSS-001"],"probe":{"type":"contains","path":"FOUNDATION.md","value":"SCSS 확장은 기존 token·변수·함수·Mixin"}}
+      ]
+    },
+    {
+      "id": "typescript-interaction",
+      "cases": [
+        {"id":"PF-SC-031","title":"TypeScript strict mode is enabled","ruleIds":["PF-TYPE-002"],"probe":{"type":"json-equals","path":"tsconfig.json","pointer":"/compilerOptions/strict","value":true}},
+        {"id":"PF-SC-032","title":"Unchecked index access is enabled","ruleIds":["PF-TYPE-002"],"probe":{"type":"json-equals","path":"tsconfig.json","pointer":"/compilerOptions/noUncheckedIndexedAccess","value":true}},
+        {"id":"PF-SC-033","title":"Exact optional properties are enabled","ruleIds":["PF-TYPE-002"],"probe":{"type":"json-equals","path":"tsconfig.json","pointer":"/compilerOptions/exactOptionalPropertyTypes","value":true}},
+        {"id":"PF-SC-034","title":"Main entry has one initializer contract","ruleIds":["PF-TYPE-001"],"probe":{"type":"contains","path":"resource/ts/main.ts","value":"type Initializer"}},
+        {"id":"PF-SC-035","title":"DOM bootstrap handles late loading","ruleIds":["PF-TYPE-001"],"probe":{"type":"contains","path":"resource/ts/main.ts","value":"DOMContentLoaded"}},
+        {"id":"PF-SC-036","title":"Vite discovers approved page entries","ruleIds":["PF-ASSET-001"],"probe":{"type":"contains","path":"vite.config.ts","value":"pageEntries(\"resource/ts/pages\""}},
+        {"id":"PF-SC-037","title":"Page script is opt-in","ruleIds":["PF-FILE-001","PF-TYPE-001"],"probe":{"type":"consumer-page","slug":"interactive","path":"/interactive","title":"Interactive","flags":["--typescript"],"files":["resource/views/pages/interactive.php","resource/ts/pages/interactive.ts"]}},
+        {"id":"PF-SC-038","title":"Explicit any mutation is rejected","ruleIds":["PF-TYPE-002"],"probe":{"type":"mutation","name":"explicit-any","error":"explicit any requires"}},
+        {"id":"PF-SC-039","title":"Disabled strict mode is rejected","ruleIds":["PF-TYPE-002"],"probe":{"type":"mutation","name":"strict-disabled","error":"strict TypeScript is required"}},
+        {"id":"PF-SC-040","title":"Three lifecycle includes disposal tests","ruleIds":["PF-INTERACTION-001"],"probe":{"type":"contains","path":".foundation/capabilities.json","value":"context loss"}}
+      ]
+    },
+    {
+      "id": "architecture-files",
+      "cases": [
+        {"id":"PF-SC-041","title":"Architecture document is generated","ruleIds":["PF-ARCH-001"],"probe":{"type":"contains","path":"ARCHITECTURE.md","value":"# Generated Architecture"}},
+        {"id":"PF-SC-042","title":"Dependency direction is explicit","ruleIds":["PF-ARCH-002"],"probe":{"type":"contains","path":"ARCHITECTURE.md","value":"public/index.php -> bootstrap/app.php -> Symfony Routing"}},
+        {"id":"PF-SC-043","title":"Custom HTTP abstractions are absent","ruleIds":["PF-HTTP-001","PF-FILE-001"],"probe":{"type":"files-absent","paths":["src/Http/Router.php","src/Http/Request.php","src/Http/Response.php","src/Container.php"]}},
+        {"id":"PF-SC-044","title":"Pages have one runtime source","ruleIds":["PF-HTTP-002"],"probe":{"type":"json-equals","path":".foundation/project.json","pointer":"/pages/source","value":"config/pages.php"}},
+        {"id":"PF-SC-045","title":"One common page controller exists","ruleIds":["PF-HTTP-002"],"probe":{"type":"contains","path":"src/Web/PageController.php","value":"final readonly class PageController"}},
+        {"id":"PF-SC-046","title":"Manual architecture drift is rejected","ruleIds":["PF-AGENT-001","PF-ARCH-001"],"probe":{"type":"mutation","name":"stale-architecture","error":"ARCHITECTURE.md is stale"}},
+        {"id":"PF-SC-047","title":"Capability plan emits state-bound SHA","ruleIds":["PF-CAP-001"],"probe":{"type":"cli-json","args":["capability","plan","i18n"],"pointer":"/planSha","pattern":"^[a-f0-9]{64}$"}},
+        {"id":"PF-SC-048","title":"Expansion gate is visible","ruleIds":["PF-FILE-001"],"probe":{"type":"contains","path":"ARCHITECTURE.md","value":"## Expansion gate"}},
+        {"id":"PF-SC-049","title":"File gate rule is indexed","ruleIds":["PF-FILE-001"],"probe":{"type":"contains","path":"FOUNDATION.md","value":"독립 책임·실제 재사용·독립 테스트"}},
+        {"id":"PF-SC-050","title":"Minimal MVC decision is project-owned","ruleIds":["PF-ARCH-002"],"probe":{"type":"contains","path":"PROJECT.md","value":"HTTP 표현 경계의 최소 MVC"}}
+      ]
+    },
+    {
+      "id": "capabilities-integrations",
+      "cases": [
+        {"id":"PF-SC-051","title":"Capability catalog has eighteen entries","ruleIds":["PF-CAP-001"],"probe":{"type":"json-length","path":".foundation/capabilities.json","pointer":"/capabilities","value":18}},
+        {"id":"PF-SC-052","title":"Publishing is active by default","ruleIds":["PF-CAP-001"],"probe":{"type":"json-includes","path":".foundation/project.json","pointer":"/capabilities/active","value":"publishing"}},
+        {"id":"PF-SC-053","title":"SEO is active for public pages","ruleIds":["PF-CAP-001"],"probe":{"type":"json-includes","path":".foundation/project.json","pointer":"/capabilities/active","value":"seo"}},
+        {"id":"PF-SC-054","title":"Payment defines webhook boundary tests","ruleIds":["PF-INTEGRATION-001"],"probe":{"type":"contains","path":".foundation/capabilities.json","value":"signature rejection"}},
+        {"id":"PF-SC-055","title":"Upload defines traversal rejection","ruleIds":["PF-SEC-002"],"probe":{"type":"contains","path":".foundation/capabilities.json","value":"path traversal"}},
+        {"id":"PF-SC-056","title":"Auth defines session rotation","ruleIds":["PF-SEC-003"],"probe":{"type":"contains","path":".foundation/capabilities.json","value":"session rotation"}},
+        {"id":"PF-SC-057","title":"Three defines loader failure","ruleIds":["PF-INTERACTION-001"],"probe":{"type":"contains","path":".foundation/capabilities.json","value":"loader failure"}},
+        {"id":"PF-SC-058","title":"Unknown capability is rejected","ruleIds":["PF-CAP-002"],"probe":{"type":"cli-reject","args":["capability","plan","unknown-feature"],"error":"Unknown capability"}},
+        {"id":"PF-SC-059","title":"Provider choice blocks payment apply","ruleIds":["PF-CAP-001","PF-INTEGRATION-001"],"probe":{"type":"capability-apply-reject","id":"payment","error":"remain Unverified"}},
+        {"id":"PF-SC-060","title":"Capability list exposes triggers","ruleIds":["PF-CAP-001"],"probe":{"type":"cli-output","args":["capability","list"],"value":"three\tWebGL scene"}}
+      ]
+    },
+    {
+      "id": "php-security",
+      "cases": [
+        {"id":"PF-SC-061","title":"HttpFoundation owns requests","ruleIds":["PF-HTTP-001"],"probe":{"type":"contains","path":"bootstrap/app.php","value":"Symfony\\Component\\HttpFoundation\\Request"}},
+        {"id":"PF-SC-062","title":"Symfony Routing owns matching","ruleIds":["PF-HTTP-001"],"probe":{"type":"contains","path":"bootstrap/app.php","value":"Symfony\\Component\\Routing\\Matcher\\UrlMatcher"}},
+        {"id":"PF-SC-063","title":"Routes allow GET and HEAD only","ruleIds":["PF-SEC-002"],"probe":{"type":"contains","path":"bootstrap/app.php","value":"methods: ['GET', 'HEAD']"}},
+        {"id":"PF-SC-064","title":"Unknown routes return 404","ruleIds":["PF-TEST-002"],"probe":{"type":"contains","path":"tests/Web/PageControllerTest.php","value":"testUnknownPageReturnsNotFound"}},
+        {"id":"PF-SC-065","title":"View escape uses UTF-8 HTML5","ruleIds":["PF-VIEW-002"],"probe":{"type":"contains","path":"src/Web/ViewRenderer.php","value":"ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5"}},
+        {"id":"PF-SC-066","title":"Development asset origin is allowlisted","ruleIds":["PF-SEC-002","PF-ASSET-001"],"probe":{"type":"contains","path":"src/Web/AssetManifest.php","value":"['127.0.0.1', 'localhost']"}},
+        {"id":"PF-SC-067","title":"Asset traversal is rejected","ruleIds":["PF-SEC-002"],"probe":{"type":"contains","path":"src/Web/AssetManifest.php","value":"str_contains($path, '..')"}},
+        {"id":"PF-SC-068","title":"Independent SCSS manifest entries become stylesheet links","ruleIds":["PF-ASSET-001"],"probe":{"type":"contains","path":"src/Web/AssetManifest.php","value":"str_ends_with($file, '.css')"}},
+        {"id":"PF-SC-069","title":"PHP range excludes unsupported future minor","ruleIds":["PF-PHP-001"],"probe":{"type":"json-equals","path":"composer.json","pointer":"/require/php","value":">=8.4.23 <8.6"}},
+        {"id":"PF-SC-070","title":"Session security is a durable rule","ruleIds":["PF-SEC-003"],"probe":{"type":"contains","path":"FOUNDATION.md","value":"세션 ID 회전"}}
+      ]
+    },
+    {
+      "id": "dependencies-versions",
+      "cases": [
+        {"id":"PF-SC-071","title":"PHP default patch is pinned","ruleIds":["PF-DEP-003"],"probe":{"type":"json-equals","path":".foundation/toolchain.json","pointer":"/php/default","value":"8.5.8"}},
+        {"id":"PF-SC-072","title":"Composer default is pinned","ruleIds":["PF-DEP-003"],"probe":{"type":"json-equals","path":".foundation/toolchain.json","pointer":"/composer/default","value":"2.10.2"}},
+        {"id":"PF-SC-073","title":"Node default is pinned","ruleIds":["PF-DEP-003"],"probe":{"type":"json-equals","path":".foundation/toolchain.json","pointer":"/node/default","value":"24.19.0"}},
+        {"id":"PF-SC-074","title":"Vite dependency is exact","ruleIds":["PF-DEP-001","PF-DEP-002"],"probe":{"type":"json-equals","path":"package.json","pointer":"/devDependencies/vite","value":"8.2.2"}},
+        {"id":"PF-SC-075","title":"Sass dependency is exact","ruleIds":["PF-DEP-001"],"probe":{"type":"json-equals","path":"package.json","pointer":"/devDependencies/sass","value":"1.103.1"}},
+        {"id":"PF-SC-076","title":"TypeScript dependency is exact","ruleIds":["PF-DEP-001"],"probe":{"type":"json-equals","path":"package.json","pointer":"/devDependencies/typescript","value":"7.0.2"}},
+        {"id":"PF-SC-077","title":"Multiple npm lockfiles are rejected","ruleIds":["PF-DEP-001"],"probe":{"type":"mutation","name":"multiple-lockfiles","error":"Multiple package-manager lockfiles"}},
+        {"id":"PF-SC-078","title":"Package lock root drift is rejected","ruleIds":["PF-DEP-001"],"probe":{"type":"mutation","name":"package-lock-drift","error":"does not match package.json"}},
+        {"id":"PF-SC-079","title":"Missing Composer lock is rejected","ruleIds":["PF-DEP-001","PF-PHP-002"],"probe":{"type":"mutation","name":"missing-composer-lock","error":"requires committed composer.lock"}},
+        {"id":"PF-SC-080","title":"Missing direct Composer package is rejected","ruleIds":["PF-DEP-001"],"probe":{"type":"mutation","name":"composer-lock-direct-missing","error":"missing direct dependency"}}
+      ]
+    },
+    {
+      "id": "docker-compose",
+      "cases": [
+        {"id":"PF-SC-081","title":"PHP base has tag and digest","ruleIds":["PF-DOCKER-003"],"probe":{"type":"contains","path":"Dockerfile","value":"ARG PHP_IMAGE=php:8.5.8-fpm-bookworm@sha256:"}},
+        {"id":"PF-SC-082","title":"Composer dependencies use cache mount","ruleIds":["PF-DOCKER-001"],"probe":{"type":"contains","path":"Dockerfile","value":"--mount=type=cache,target=/tmp/composer-cache"}},
+        {"id":"PF-SC-083","title":"Production runs as non-root","ruleIds":["PF-DOCKER-001","PF-SEC-004"],"probe":{"type":"contains","path":"Dockerfile","value":"USER www-data"}},
+        {"id":"PF-SC-084","title":"Nginx runs as non-root","ruleIds":["PF-DOCKER-001","PF-SEC-004"],"probe":{"type":"contains","path":"Dockerfile","value":"USER nginx"}},
+        {"id":"PF-SC-085","title":"Compose uses canonical name without version","ruleIds":["PF-DOCKER-002"],"probe":{"type":"not-contains","path":"compose.yaml","value":"version:"}},
+        {"id":"PF-SC-086","title":"Compose drops all capabilities","ruleIds":["PF-SEC-004"],"probe":{"type":"contains","path":"compose.yaml","value":"cap_drop:"}},
+        {"id":"PF-SC-087","title":"Compose blocks privilege escalation","ruleIds":["PF-SEC-004"],"probe":{"type":"contains","path":"compose.yaml","value":"no-new-privileges:true"}},
+        {"id":"PF-SC-088","title":"Floating image tag is rejected","ruleIds":["PF-DOCKER-003"],"probe":{"type":"mutation","name":"floating-docker-image","error":"tag and SHA-256"}},
+        {"id":"PF-SC-089","title":"Privileged Compose is rejected","ruleIds":["PF-DOCKER-002","PF-SEC-004"],"probe":{"type":"mutation","name":"privileged-compose","error":"forbidden high-risk setting"}},
+        {"id":"PF-SC-090","title":"Compose file-name conflict is rejected","ruleIds":["PF-DOCKER-002"],"probe":{"type":"mutation","name":"compose-name-conflict","error":"compose.yml conflicts"}}
+      ]
+    },
+    {
+      "id": "git-github",
+      "cases": [
+        {"id":"PF-SC-091","title":"Foundation policy check is stable","ruleIds":["PF-GIT-001"],"probe":{"type":"contains","path":".github/workflows/quality.yml","value":"name: foundation-policy"}},
+        {"id":"PF-SC-092","title":"Project quality check is stable","ruleIds":["PF-GIT-001"],"probe":{"type":"contains","path":".github/workflows/quality.yml","value":"name: project-quality"}},
+        {"id":"PF-SC-093","title":"Container check is stable","ruleIds":["PF-GIT-001"],"probe":{"type":"contains","path":".github/workflows/quality.yml","value":"name: container"}},
+        {"id":"PF-SC-094","title":"Dependency gate is stable","ruleIds":["PF-DEP-002"],"probe":{"type":"contains","path":".github/workflows/dependency-review.yml","value":"name: dependency-gate"}},
+        {"id":"PF-SC-095","title":"Actions use minimal default permission","ruleIds":["PF-SEC-004"],"probe":{"type":"contains","path":".github/workflows/quality.yml","value":"contents: read"}},
+        {"id":"PF-SC-096","title":"PR template requires rule evidence","ruleIds":["PF-GIT-002"],"probe":{"type":"contains","path":".github/PULL_REQUEST_TEMPLATE.md","value":"## Rule evidence"}},
+        {"id":"PF-SC-097","title":"PR template requires file rationale","ruleIds":["PF-FILE-001"],"probe":{"type":"contains","path":".github/PULL_REQUEST_TEMPLATE.md","value":"## New files and folders"}},
+        {"id":"PF-SC-098","title":"Unpinned action is rejected","ruleIds":["PF-SEC-004"],"probe":{"type":"mutation","name":"unpinned-action","error":"not pinned to a full commit SHA"}},
+        {"id":"PF-SC-099","title":"pull_request_target is rejected","ruleIds":["PF-SEC-004"],"probe":{"type":"mutation","name":"pull-request-target","error":"pull_request_target is forbidden"}},
+        {"id":"PF-SC-100","title":"Release version has one changelog entry","ruleIds":["PF-GIT-003"],"probe":{"type":"contains","path":"CHANGELOG.md","value":"## 1.0.0 -"}}
+      ]
+    },
+    {
+      "id": "agents-docs",
+      "cases": [
+        {"id":"PF-SC-101","title":"Codex reads Foundation first","ruleIds":["PF-AGENT-002"],"probe":{"type":"contains","path":"AGENTS.md","value":"1. `FOUNDATION.md`"}},
+        {"id":"PF-SC-102","title":"Codex reads Project Intake","ruleIds":["PF-AGENT-002"],"probe":{"type":"contains","path":"AGENTS.md","value":"`PROJECT.md`"}},
+        {"id":"PF-SC-103","title":"Claude imports AGENTS","ruleIds":["PF-AGENT-004"],"probe":{"type":"contains","path":"CLAUDE.md","value":"@AGENTS.md"}},
+        {"id":"PF-SC-104","title":"Claude imports Foundation","ruleIds":["PF-AGENT-004"],"probe":{"type":"contains","path":"CLAUDE.md","value":"@FOUNDATION.md"}},
+        {"id":"PF-SC-105","title":"Claude imports Project","ruleIds":["PF-AGENT-004"],"probe":{"type":"contains","path":"CLAUDE.md","value":"@PROJECT.md"}},
+        {"id":"PF-SC-106","title":"Cursor references Foundation","ruleIds":["PF-AGENT-004"],"probe":{"type":"contains","path":".cursor/rules/project.mdc","value":"@FOUNDATION.md"}},
+        {"id":"PF-SC-107","title":"Cursor references Project","ruleIds":["PF-AGENT-004"],"probe":{"type":"contains","path":".cursor/rules/project.mdc","value":"@PROJECT.md"}},
+        {"id":"PF-SC-108","title":"SessionStart hook is configured","ruleIds":["PF-AGENT-002","PF-AGENT-003"],"probe":{"type":"json-has","path":".codex/hooks.json","pointer":"/hooks/SessionStart"}},
+        {"id":"PF-SC-109","title":"PreToolUse hook is configured","ruleIds":["PF-AGENT-002","PF-AGENT-003"],"probe":{"type":"json-has","path":".codex/hooks.json","pointer":"/hooks/PreToolUse"}},
+        {"id":"PF-SC-110","title":"Stop hook is configured","ruleIds":["PF-AGENT-002","PF-AGENT-003"],"probe":{"type":"json-has","path":".codex/hooks.json","pointer":"/hooks/Stop"}}
+      ]
+    },
+    {
+      "id": "lifecycle-update",
+      "cases": [
+        {"id":"PF-SC-111","title":"PHP-only minimal init succeeds","ruleIds":["PF-CORE-001","PF-PHP-001"],"probe":{"type":"init","profiles":"core","present":["composer.json","public/index.php"],"absent":["package.json","Dockerfile"]}},
+        {"id":"PF-SC-112","title":"Full PHP site init succeeds","ruleIds":["PF-CORE-001"],"probe":{"type":"init","profiles":"github,docker,typescript,scss","owner":"DevCrop","present":["Dockerfile","package.json","resource/scss/main.scss","resource/ts/main.ts"]}},
+        {"id":"PF-SC-113","title":"Init output is deterministic","ruleIds":["PF-TEST-001"],"probe":{"type":"deterministic-init","profiles":"github,docker,typescript,scss","owner":"DevCrop"}},
+        {"id":"PF-SC-114","title":"Init preserves unrelated existing files by refusing","ruleIds":["PF-CORE-002"],"probe":{"type":"init-conflict"}},
+        {"id":"PF-SC-115","title":"Path traversal is rejected","ruleIds":["PF-SEC-002"],"probe":{"type":"path-reject","value":"../outside"}},
+        {"id":"PF-SC-116","title":"Tar traversal is rejected","ruleIds":["PF-SEC-002"],"probe":{"type":"tar-reject","value":"../escape.txt"}},
+        {"id":"PF-SC-117","title":"Modified managed file blocks update before download","ruleIds":["PF-CORE-002"],"probe":{"type":"update-managed-conflict"}},
+        {"id":"PF-SC-118","title":"Strict upstream validation succeeds","ruleIds":["PF-TEST-001"],"probe":{"type":"validate-pass"}},
+        {"id":"PF-SC-119","title":"Expired source blocks strict release","ruleIds":["PF-EVIDENCE-004"],"probe":{"type":"validate-at","date":"2026-10-01","error":"source verification"}},
+        {"id":"PF-SC-120","title":"Legacy identifier remains absent","ruleIds":["PF-AGENT-001"],"probe":{"type":"not-contains","path":"README.md","value":"MISE"}}
+      ]
+    }
+  ]
+}

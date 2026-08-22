@@ -14,13 +14,16 @@
 
 ### Breaking
 
-## 1.0.0 - 2026-08-21
+## 1.0.0 - 2026-08-22
 
 ### Added
 
-- 공통 규칙, 에이전트 인덱스와 공식 출처 레지스트리
-- Core, GitHub, Docker, Node, TypeScript, SCSS, Custom 프로필
-- 신규 프로젝트 init과 기존 프로젝트 adopt plan/apply, validate, verify, update, doctor, agent, GitHub plan/apply CLI
-- Codex SessionStart·Stop Hook, 공유 Skills와 Cursor·Claude 원본 라우팅
-- 런타임 중립 project.json command/args 계약과 stable GitHub Actions 검사
-- Dependabot, branch/tag ruleset 및 capability-aware 보안 자동화
+- PHP 웹사이트 공통 규칙, 프로젝트 인테이크, 공식 출처와 검증 증거 레지스트리
+- 신규 프로젝트 init, 기존 PHP 프로젝트 adopt plan/apply, Page 추가와 Capability plan/apply CLI
+- `section > container > inner` 기반의 선택형 section shell과 순수 PHP View·공통 PageController
+- 최소 SCSS main entry, Sass module, strict TypeScript와 Vite backend manifest 통합
+- PHP-FPM·Nginx non-root multi-stage Docker, Compose Watch와 얇은 Make 명령 계층
+- PHP 8.4·8.5, Node LTS, 잠금 파일과 정확한 npm 도구 버전 호환 검사
+- Codex SessionStart·PreToolUse·Stop Hook, 공유 Skills와 Cursor·Claude 원본 라우팅
+- Foundation·프로젝트·컨테이너·의존성 stable checks와 GitHub ruleset·보안 계획
+- 12개 위험 그룹으로 구분한 정확히 120개 canonical scenario와 mutation 검사

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "operations-governance",
+  "purpose": "Docker·GitHub·분석·SEO·릴리스가 같은 증거와 최소 권한 정책을 사용하게 한다.",
+  "intake": ["repository owner", "visibility", "default branch", "deployment target", "secret owner", "budgets", "rollback"],
+  "decisions": ["capability availability", "required checks", "container hardening compatibility", "release immutability"],
+  "ruleIds": ["PF-GIT-001", "PF-GIT-003", "PF-SEC-004", "PF-DOCKER-001", "PF-PERF-001", "PF-TEST-003"]
+}

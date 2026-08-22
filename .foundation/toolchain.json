@@ -1,6 +1,15 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-21",
+  "verifiedAt": "2026-08-22",
+  "php": {
+    "default": "8.5.8",
+    "supported": ["8.4.23", "8.5.8"],
+    "constraint": ">=8.4.23 <8.6"
+  },
+  "composer": {
+    "default": "2.10.2",
+    "minimum": "2.10.2"
+  },
   "node": {
     "default": "24.19.0",
     "supported": ["22.23.2", "24.19.0"],
@@ -13,7 +22,13 @@
   },
   "docker": {
     "tested": "28.0.4",
-    "baseImage": "node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03",
+    "images": {
+      "phpFpm84": "php:8.4.23-fpm-bookworm@sha256:66a10c4b32b2f5886c32a4fb23c6cc3e727661e6a929c241befb335aaee0290e",
+      "phpFpm": "php:8.5.8-fpm-bookworm@sha256:83c155135b9c4aa664fc6ce47020a10fe53576a0ed3468119cf2efec22fd16b9",
+      "composer": "composer:2.10.2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040",
+      "node": "node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03",
+      "nginx": "nginx:1.28.0-alpine@sha256:30f1c0d78e0ad60901648be663a710bdadf19e4c10ac6782c235200619158284"
+    },
     "dockerfileFrontend": "docker/dockerfile:1.12@sha256:93bfd3b68c109427185cd78b4779fc82b484b0b7618e36d0f104d4d801e66d25"
   },
   "compose": {
@@ -32,5 +47,5 @@
     "requiredFor": ["github plan", "github apply"],
     "tested": "2.96.0"
   },
-  "profiles": ["core", "github", "docker", "node", "typescript", "scss", "custom"]
+  "profiles": ["core", "php", "web", "assets", "github", "docker", "typescript", "scss"]
 }

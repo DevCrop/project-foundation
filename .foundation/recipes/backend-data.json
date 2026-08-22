@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "backend-data",
+  "purpose": "MySQL·upload·cache·queue를 실제 기능 소유권과 보안·트랜잭션 경계 안에서 추가한다.",
+  "intake": ["data owner", "schema", "retention", "migration and rollback", "consistency", "backup and restore"],
+  "decisions": ["transaction boundary", "repository only when replaceable boundary exists", "cache only after measurement", "queue only outside request budget"],
+  "ruleIds": ["PF-SEC-002", "PF-DB-001", "PF-CAP-001", "PF-TEST-002"]
+}
