@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Validate release
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          test "$VERSION" = "$PACKAGE_VERSION"
+          grep -F "## $VERSION -" CHANGELOG.md
+          node scripts/foundation.mjs validate --strict
+          npm test
+          npm run typecheck
+          npm run build
+      - name: Validate PHP project in pinned Composer container
+        env:
+          FOUNDATION_PHP_CONTAINER: "1"
+        run: |
+          node scripts/foundation.mjs run install
+          node scripts/foundation.mjs verify --scope project
+      - name: Create release assets
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p .release
+          git archive --format=tar.gz --prefix="project-foundation-v${VERSION}/" --output=".release/project-foundation-v${VERSION}.tar.gz" HEAD
+          cd .release
+          sha256sum "project-foundation-v${VERSION}.tar.gz" > "project-foundation-v${VERSION}.tar.gz.sha256"
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
+            ".release/project-foundation-${GITHUB_REF_NAME}.tar.gz" \
+            ".release/project-foundation-${GITHUB_REF_NAME}.tar.gz.sha256"

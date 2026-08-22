@@ -1,0 +1,32 @@
+{
+  "name": "project-foundation",
+  "version": "1.0.0",
+  "description": "Evidence-based PHP site starter, project rules, validation, and automation",
+  "private": false,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.22.0 <25"
+  },
+  "packageManager": "npm@12.0.2",
+  "allowScripts": {
+    "@parcel/watcher@2.6.0": true
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "vite",
+    "styles:build": "vite build",
+    "test": "node --test scripts/foundation.test.mjs",
+    "validate": "node scripts/foundation.mjs validate --strict",
+    "doctor": "node scripts/foundation.mjs doctor",
+    "release:check": "node scripts/foundation.mjs validate --strict"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "sass": "1.103.1",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}

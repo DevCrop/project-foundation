@@ -1,0 +1,39 @@
+name: Dependency gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-gate:
+    name: dependency-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Review dependency changes
+        if: ${{ github.event.repository.private == false }}
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+      - name: Setup Foundation Node for private fallback
+        if: ${{ github.event.repository.private == true }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.19.0"
+          cache: npm
+      - name: Install private fallback dependencies
+        if: ${{ github.event.repository.private == true }}
+        run: npm ci
+      - name: Run private repository dependency fallback
+        if: ${{ github.event.repository.private == true }}
+        env:
+          FOUNDATION_PHP_CONTAINER: "1"
+        run: node scripts/foundation.mjs verify --scope dependency

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "web-core",
+  "purpose": "PHP가 의미 있는 HTML을 렌더링하는 최소 페이지·폼·인증·관리 UI 경계를 선택한다.",
+  "intake": ["page map", "content owner", "server behavior", "authenticated roles", "reference design"],
+  "decisions": ["simple page or feature controller", "shared component after second use", "HTTP MVC boundary only"],
+  "ruleIds": ["PF-ARCH-002", "PF-HTTP-002", "PF-VIEW-001", "PF-VIEW-002", "PF-HTML-001", "PF-HTML-002"]
+}

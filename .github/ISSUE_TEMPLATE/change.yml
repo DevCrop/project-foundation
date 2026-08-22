@@ -1,0 +1,33 @@
+name: Foundation change
+description: Propose one logical policy, automation, or compatibility change.
+title: "change: "
+labels: ["change"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the repeated problem or missing capability.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Include affected rule IDs, profiles, and public commands.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Official source or local policy
+      description: Link official vendor documentation or label the proposal as Project Foundation Policy.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and rollback
+      description: Explain migration, breaking-change, and rollback considerations.
+    validations:
+      required: true

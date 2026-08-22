@@ -1,6 +1,8 @@
 node_modules/
+vendor/
 dist/
 build/
+public/build/
 coverage/
 .release/
 .cache/

@@ -1,0 +1,14 @@
+@use "../abstract/tokens" as token;
+
+.card {
+  display: grid;
+  gap: token.$space-3;
+  padding: token.$space-5;
+  border: 1px solid token.$color-line;
+  border-radius: token.$radius;
+}
+
+.card__title,
+.card__body {
+  margin: 0;
+}

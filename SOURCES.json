@@ -1,0 +1,431 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-08-22",
+  "allowedDomains": [
+    "code.claude.com",
+    "cursor.com",
+    "developers.openai.com",
+    "docs.docker.com",
+    "docs.github.com",
+    "docs.npmjs.com",
+    "getcomposer.org",
+    "git-scm.com",
+    "github.com",
+    "html.spec.whatwg.org",
+    "learn.chatgpt.com",
+    "nginx.org",
+    "nodejs.org",
+    "sass-lang.com",
+    "semver.org",
+    "symfony.com",
+    "threejs.org",
+    "vite.dev",
+    "www.gnu.org",
+    "www.php-fig.org",
+    "www.php.net",
+    "www.w3.org",
+    "www.typescriptlang.org"
+  ],
+  "sources": [
+    {
+      "id": "codex-agents-md",
+      "provider": "OpenAI",
+      "url": "https://learn.chatgpt.com/docs/agent-configuration/agents-md",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["AGENTS.md discovery", "instruction precedence", "size limits"]
+    },
+    {
+      "id": "codex-hooks",
+      "provider": "OpenAI",
+      "url": "https://learn.chatgpt.com/docs/hooks",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["project hooks", "SessionStart", "Stop", "commandWindows", "hook trust"]
+    },
+    {
+      "id": "codex-skills",
+      "provider": "OpenAI",
+      "url": "https://learn.chatgpt.com/docs/build-skills",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["Agent Skills", ".agents/skills"]
+    },
+    {
+      "id": "cursor-rules",
+      "provider": "Cursor",
+      "url": "https://cursor.com/docs/rules",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["project rules", "AGENTS.md", "rule references"]
+    },
+    {
+      "id": "cursor-skills",
+      "provider": "Cursor",
+      "url": "https://cursor.com/docs/skills",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["Agent Skills", ".agents/skills"]
+    },
+    {
+      "id": "claude-memory",
+      "provider": "Anthropic",
+      "url": "https://code.claude.com/docs/en/memory",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["CLAUDE.md", "imports", "project instructions"]
+    },
+    {
+      "id": "claude-skills",
+      "provider": "Anthropic",
+      "url": "https://code.claude.com/docs/en/slash-commands",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["project skills", "SKILL.md"]
+    },
+    {
+      "id": "github-template-repository",
+      "provider": "GitHub",
+      "url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["template repositories"]
+    },
+    {
+      "id": "github-rulesets",
+      "provider": "GitHub",
+      "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["branch rulesets", "required checks", "linear history"]
+    },
+    {
+      "id": "github-actions-security",
+      "provider": "GitHub",
+      "url": "https://docs.github.com/en/actions/security-for-github-actions/security-guides",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["least privilege", "action pinning", "secrets"]
+    },
+    {
+      "id": "github-dependency-review",
+      "provider": "GitHub",
+      "url": "https://docs.github.com/en/code-security/concepts/supply-chain-security/dependency-review",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["dependency review"]
+    },
+    {
+      "id": "github-dependabot",
+      "provider": "GitHub",
+      "url": "https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["npm", "docker", "docker-compose", "github-actions"]
+    },
+    {
+      "id": "github-immutable-releases",
+      "provider": "GitHub",
+      "url": "https://docs.github.com/en/rest/repos/repos#enable-immutable-releases",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["immutable releases", "release asset immutability"]
+    },
+    {
+      "id": "node-release-policy",
+      "provider": "Node.js",
+      "url": "https://nodejs.org/en/about/previous-releases",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["LTS", "EOL", "release schedule"]
+    },
+    {
+      "id": "npm-ci",
+      "provider": "npm",
+      "url": "https://docs.npmjs.com/cli/commands/npm-ci/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["frozen install", "package-lock.json", "allowScripts"]
+    },
+    {
+      "id": "semantic-versioning",
+      "provider": "Semantic Versioning",
+      "url": "https://semver.org/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["major", "minor", "patch", "public API"]
+    },
+    {
+      "id": "typescript-strict",
+      "provider": "TypeScript",
+      "url": "https://www.typescriptlang.org/tsconfig/strict.html",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["strict mode"]
+    },
+    {
+      "id": "sass-use",
+      "provider": "Sass",
+      "url": "https://sass-lang.com/documentation/at-rules/use/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["@use", "namespaces"]
+    },
+    {
+      "id": "sass-forward",
+      "provider": "Sass",
+      "url": "https://sass-lang.com/documentation/at-rules/forward/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["@forward", "public API"]
+    },
+    {
+      "id": "sass-mixin",
+      "provider": "Sass",
+      "url": "https://sass-lang.com/documentation/at-rules/mixin/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["mixins"]
+    },
+    {
+      "id": "docker-build-best-practices",
+      "provider": "Docker",
+      "url": "https://docs.docker.com/build/building/best-practices/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["multi-stage", "minimal images", "digest pinning", ".dockerignore"]
+    },
+    {
+      "id": "docker-cache-optimization",
+      "provider": "Docker",
+      "url": "https://docs.docker.com/build/cache/optimize/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["layer order", "cache mounts", "external cache"]
+    },
+    {
+      "id": "docker-compose-model",
+      "provider": "Docker",
+      "url": "https://docs.docker.com/compose/intro/compose-application-model/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["compose.yaml", "Compose Specification", "services"]
+    },
+    {
+      "id": "docker-compose-watch",
+      "provider": "Docker",
+      "url": "https://docs.docker.com/compose/how-tos/file-watch/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["watch", "sync", "rebuild", "node_modules"]
+    },
+    {
+      "id": "docker-build-checks",
+      "provider": "Docker",
+      "url": "https://docs.docker.com/build/checks/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["Buildx checks", "Dockerfile linting"]
+    },
+    {
+      "id": "docker-attestations",
+      "provider": "Docker",
+      "url": "https://docs.docker.com/build/ci/github-actions/attestations/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["SBOM", "provenance", "secret mounts"]
+    },
+    {
+      "id": "gnu-make",
+      "provider": "GNU",
+      "url": "https://www.gnu.org/software/make/manual/",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["Makefile", ".PHONY", "targets"]
+    },
+    {
+      "id": "git-attributes",
+      "provider": "Git",
+      "url": "https://git-scm.com/docs/gitattributes",
+      "verifiedAt": "2026-08-21",
+      "reviewIntervalDays": 31,
+      "covers": ["line endings", "working tree encoding"]
+    },
+    {
+      "id": "php-supported-versions",
+      "provider": "PHP",
+      "url": "https://www.php.net/supported-versions.php",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["active support", "security support", "end of life"]
+    },
+    {
+      "id": "php-releases",
+      "provider": "PHP",
+      "url": "https://www.php.net/releases/index.php",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["PHP 8.4 patch", "PHP 8.5 patch", "release checksums"]
+    },
+    {
+      "id": "composer-download",
+      "provider": "Composer",
+      "url": "https://getcomposer.org/download/",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["latest stable", "maintenance policy", "installer checksum"]
+    },
+    {
+      "id": "composer-schema",
+      "provider": "Composer",
+      "url": "https://getcomposer.org/doc/04-schema.md",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["composer.json", "PSR-4", "platform requirements", "lock ownership"]
+    },
+    {
+      "id": "composer-autoload",
+      "provider": "Composer",
+      "url": "https://getcomposer.org/doc/articles/autoloader-optimization.md",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["production autoloader optimization"]
+    },
+    {
+      "id": "composer-runtime",
+      "provider": "Composer",
+      "url": "https://getcomposer.org/doc/07-runtime.md",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["platform check", "installed versions"]
+    },
+    {
+      "id": "php-fig-per",
+      "provider": "PHP-FIG",
+      "url": "https://www.php-fig.org/per/coding-style/",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["PER Coding Style 3.0"]
+    },
+    {
+      "id": "symfony-http-foundation",
+      "provider": "Symfony",
+      "url": "https://symfony.com/doc/current/components/http_foundation.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["standalone Request", "Response", "Composer autoload"]
+    },
+    {
+      "id": "symfony-routing",
+      "provider": "Symfony",
+      "url": "https://symfony.com/doc/current/routing.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["route collection", "URL matching"]
+    },
+    {
+      "id": "php-pdo-prepare",
+      "provider": "PHP",
+      "url": "https://www.php.net/manual/en/pdo.prepare.php",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["prepared statements", "parameter binding"]
+    },
+    {
+      "id": "php-session-security",
+      "provider": "PHP",
+      "url": "https://www.php.net/manual/en/features.session.security.management.php",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["session ID regeneration", "cookie security", "CSRF"]
+    },
+    {
+      "id": "php-htmlspecialchars",
+      "provider": "PHP",
+      "url": "https://www.php.net/manual/en/function.htmlspecialchars.php",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["HTML output encoding"]
+    },
+    {
+      "id": "vite-backend-integration",
+      "provider": "Vite",
+      "url": "https://vite.dev/guide/backend-integration.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["backend rendered HTML", "development origin", "build manifest"]
+    },
+    {
+      "id": "html-sections",
+      "provider": "WHATWG",
+      "url": "https://html.spec.whatwg.org/multipage/sections.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["section", "article", "heading", "header"]
+    },
+    {
+      "id": "wcag22",
+      "provider": "W3C",
+      "url": "https://www.w3.org/WAI/WCAG22/quickref/",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["WCAG 2.2", "keyboard", "reduced motion", "content structure"]
+    },
+    {
+      "id": "three-cleanup",
+      "provider": "Three.js",
+      "url": "https://threejs.org/manual/en/cleanup.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["dispose", "resource tracking"]
+    },
+    {
+      "id": "three-loaders",
+      "provider": "Three.js",
+      "url": "https://threejs.org/docs/",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["KTX2Loader", "DRACOLoader"]
+    },
+    {
+      "id": "nginx-fastcgi",
+      "provider": "Nginx",
+      "url": "https://nginx.org/en/docs/http/ngx_http_fastcgi_module.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["FastCGI", "PHP-FPM upstream", "script filename"]
+    },
+    {
+      "id": "github-action-checkout",
+      "provider": "GitHub",
+      "url": "https://github.com/actions/checkout/releases",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["checkout release", "immutable commit SHA"]
+    },
+    {
+      "id": "github-action-setup-node",
+      "provider": "GitHub",
+      "url": "https://github.com/actions/setup-node/releases",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["Node setup release", "npm cache behavior", "immutable commit SHA"]
+    },
+    {
+      "id": "github-action-setup-buildx",
+      "provider": "Docker",
+      "url": "https://github.com/docker/setup-buildx-action/releases",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["Buildx setup release", "immutable commit SHA"]
+    },
+    {
+      "id": "github-action-dependency-review",
+      "provider": "GitHub",
+      "url": "https://github.com/actions/dependency-review-action/releases",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["dependency review release", "repository eligibility", "immutable commit SHA"]
+    }
+  ]
+}

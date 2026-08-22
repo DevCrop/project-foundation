@@ -1,0 +1,6 @@
+---
+description: Project Foundation 공통 규칙과 현재 프로젝트 결정을 연결한다.
+alwaysApply: true
+---
+
+작업 전 @FOUNDATION.md 와 @PROJECT.md 를 읽는다. 공통 규칙 본문은 참조 파일이 소유한다. PHP 사이트 시작·페이지·Capability 선택에는 `.agents/skills/site-starter/SKILL.md`, 구조 변경에는 `.agents/skills/architecture-selection/SKILL.md`, 일반 구현 변경에는 `.agents/skills/change-workflow/SKILL.md`를 사용한다.

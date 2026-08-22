@@ -1,0 +1,33 @@
+@use "../abstract/tokens" as token;
+
+.section {
+  padding-block: token.$section-space;
+}
+
+.container {
+  width: min(100% - (token.$gutter * 2), token.$content-width);
+  margin-inline: auto;
+}
+
+.inner {
+  display: grid;
+  gap: token.$space-8;
+}
+
+.section-header {
+  display: grid;
+  gap: token.$space-3;
+  max-width: 48rem;
+}
+
+.section-title,
+.eyebrow,
+.section-body {
+  margin: 0;
+}
+
+.section-contents {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: token.$space-5;
+}
