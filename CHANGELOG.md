@@ -14,6 +14,17 @@
 
 ### Breaking
 
+## 1.0.2 - 2026-08-22
+
+### Fixed
+
+- 이전 updater도 읽을 수 있도록 Release tarball을 commit이 아닌 tree object에서 생성
+- Git archive가 commit archive에 기록하는 global extended PAX metadata를 새 parser가 안전하게 건너뛰도록 보강
+
+### Security
+
+- 실제 immutable v1.0.0 자산에서 최신 Release로 업데이트하는 smoke test를 릴리스 승인 증거에 포함
+
 ## 1.0.1 - 2026-08-22
 
 ### Fixed

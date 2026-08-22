@@ -252,6 +252,14 @@
       "covers": ["line endings", "working tree encoding"]
     },
     {
+      "id": "git-archive",
+      "provider": "Git",
+      "url": "https://git-scm.com/docs/git-archive",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["tar archive", "tree object", "global extended pax header"]
+    },
+    {
       "id": "php-supported-versions",
       "provider": "PHP",
       "url": "https://www.php.net/supported-versions.php",

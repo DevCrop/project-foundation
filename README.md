@@ -211,11 +211,11 @@ PR에는 적용 PF 규칙, 새 파일 책임, 의존성 검토, 실제 검증 �
 ## 업데이트와 릴리스
 
 ```text
-node scripts/foundation.mjs update --version 1.0.1
+node scripts/foundation.mjs update --version 1.0.2
 node scripts/foundation.mjs verify --base origin/main
 ```
 
-업데이트는 정식 Release 자산, 경로, 크기, 버전과 SHA-256을 검증한다. managed 파일이 수정됐으면 다운로드 전에 전체를 중단하고 `PROJECT.md`, `.foundation/project.json`, Page·Capability 설정과 다른 seed 파일을 덮어쓰지 않는다.
+업데이트는 정식 Release 자산, 경로, 크기, 버전과 SHA-256을 검증한다. managed 파일이 수정됐으면 다운로드 전에 전체를 중단하고 `PROJECT.md`, `.foundation/project.json`, Page·Capability 설정과 다른 seed 파일을 덮어쓰지 않는다. Release tarball은 이전 updater가 읽을 수 있는 Git tree archive로 만들며 실제 이전 immutable Release에서 최신 버전으로 update를 시험한다.
 
 정식 릴리스는 12개 그룹의 canonical scenario 120개, mutation 검사, PHP 8.4·8.5, Docker build·health, agent adapter, GitHub ruleset과 31일 이내 공식 출처를 모두 증명해야 한다. GitHub Release는 draft에 자산과 체크섬을 먼저 올린 뒤 불변 상태로 게시한다.
 

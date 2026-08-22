@@ -177,6 +177,19 @@
 - Evidence: Release API의 `immutable: true`와 자산 digest
 - Rule: 정식 GitHub Release는 draft에 자산을 완성한 뒤 불변 상태로 게시해야 한다.
 
+### PF-GIT-005 — 업데이트 자산 호환성
+
+- Level: MUST
+- Profiles: github
+- Authority: git-archive
+- Trigger: 이전 Foundation 버전이 읽을 정식 업데이트 archive를 만드는 경우
+- Do: 지원 중인 이전 updater가 읽을 수 있는 tree archive를 만들고 실제 이전 Release에서 update를 시험한다.
+- Don't: 현재 parser의 자체 생성 fixture만으로 배포 archive 호환성을 선언하지 않는다.
+- Exception: no
+- Enforced by: validator, ci
+- Evidence: 이전 immutable Release에서 최신 Release로 수행한 init·update smoke test
+- Rule: 업데이트 archive 형식은 실제 지원 중인 이전 Release parser와 호환되어야 한다.
+
 ## Security
 
 ### PF-SEC-001 — 비밀값
