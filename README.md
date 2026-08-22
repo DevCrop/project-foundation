@@ -211,7 +211,7 @@ PR에는 적용 PF 규칙, 새 파일 책임, 의존성 검토, 실제 검증 �
 ## 업데이트와 릴리스
 
 ```text
-node scripts/foundation.mjs update --version 1.0.2
+node scripts/foundation.mjs update --version 1.0.3
 node scripts/foundation.mjs verify --base origin/main
 ```
 

@@ -446,6 +446,18 @@ test("full PHP initialization, page generation, and asset build are deterministi
     await initializeConsumer(root);
     const page = runCli(root, ["page", "add", "sub-1", "--path", "/sub-1", "--title", "Sub 1", "--scss", "--typescript"]);
     assert.equal(page.status, 0, page.stderr);
+
+    const homeViewPath = path.join(root, "resource", "views", "pages", "home.php");
+    const homeView = await readFile(homeViewPath, "utf8");
+    await rm(homeViewPath);
+    const duplicateSlug = runCli(root, ["page", "add", "home", "--path", "/new-home", "--title", "Duplicate Home"]);
+    assert.notEqual(duplicateSlug.status, 0);
+    assert.match(duplicateSlug.stderr, /Page already exists: home/);
+    await writeFile(homeViewPath, homeView, "utf8");
+
+    const duplicateRoute = runCli(root, ["page", "add", "another-page", "--path", "/sub-1", "--title", "Duplicate Route"]);
+    assert.notEqual(duplicateRoute.status, 0);
+    assert.match(duplicateRoute.stderr, /Route path already exists: \/sub-1/);
     assert.equal(runCli(root, ["validate", "--strict"]).status, 0);
   }
   assert.deepEqual(await snapshotTree(first), await snapshotTree(second));

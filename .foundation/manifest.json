@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "foundationVersion": "1.0.2",
+  "foundationVersion": "1.0.3",
   "mode": "upstream",
   "activeProfiles": [
     "core",
@@ -37,7 +37,7 @@
     "FOUNDATION.md": "7c1c1afff165f3b8e1cf642874da2a98254a954750430779e36eb024e79e1a26",
     "SECURITY.md": "0dcbe0c899627cc441f936edeb19763988c0dc48a1ec195a9f6dda4ad0977c1a",
     "SOURCES.json": "b3b6270ee94947667a3c383f6ffa734ec8ea1c86a53fbdb15d2d44643771e2b8",
-    "scripts/foundation.mjs": "dbccc1d3ab6bdfbdc3026e9d5628240e1c7f7185280ac3cd712c21c426321bce",
+    "scripts/foundation.mjs": "6dab433778de7015b0fd8265848409715c42e0678f2b9a414812305269c90068",
     ".github/ISSUE_TEMPLATE/change.yml": "1764532414e65ed83e7114132d691d7e7f208e5e2d98f59dfaa4fc330eb74c00",
     ".github/PULL_REQUEST_TEMPLATE.md": "349ece6fe1344ec05e185f45909c5d3f4199437ad41cc1742cc3ad9ad8ed7100",
     ".github/dependabot.yml": "7583bdfdb9839493a606dde4b2e75bfcaa3088db072ee9fff03ecf206e091a7b",

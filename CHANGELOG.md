@@ -14,6 +14,13 @@
 
 ### Breaking
 
+## 1.0.3 - 2026-08-22
+
+### Security
+
+- Page slug와 route 중복 검사에서 입력 기반 동적 정규식을 제거해 CodeQL `js/regex-injection` High 경고 2건 해소
+- 정규식을 조립하지 않는 고정 형식 비교와 slug·route 중복 회귀 테스트 추가
+
 ## 1.0.2 - 2026-08-22
 
 ### Fixed

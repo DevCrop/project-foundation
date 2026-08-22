@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FOUNDATION_VERSION = "1.0.2";
+const FOUNDATION_VERSION = "1.0.3";
 const OFFICIAL_UPSTREAM = "https://github.com/DevCrop/project-foundation";
 const VALID_RUNTIMES = new Set(["php"]);
 const VALID_PROFILES = new Set(["core", "php", "web", "assets", "typescript", "scss", "docker", "github"]);
@@ -1496,8 +1496,8 @@ async function addPage(root, { slug, routePath, title, scss = false, typescript 
   if (!configuration.includes("// <foundation:pages>") || !configuration.includes("// </foundation:pages>")) {
     throw new FoundationError("config/pages.php is missing Foundation page markers; no files were changed.");
   }
-  if (new RegExp(`^\\s*'${slug}'\\s*=>`, "m").test(configuration)) throw new FoundationError(`Page already exists: ${slug}`);
-  if (new RegExp(`'path'\\s*=>\\s*'${routePath.replaceAll("/", "\\/")}'`).test(configuration)) throw new FoundationError(`Route path already exists: ${routePath}`);
+  if (configuration.includes(`    '${slug}' => [`)) throw new FoundationError(`Page already exists: ${slug}`);
+  if (configuration.includes(`        'path' => '${phpSingleQuoted(routePath)}',`)) throw new FoundationError(`Route path already exists: ${routePath}`);
 
   const assets = [];
   if (typescript) assets.push(typeScriptPath);
