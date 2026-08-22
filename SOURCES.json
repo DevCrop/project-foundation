@@ -126,10 +126,10 @@
     {
       "id": "github-immutable-releases",
       "provider": "GitHub",
-      "url": "https://docs.github.com/en/rest/repos/repos#enable-immutable-releases",
-      "verifiedAt": "2026-08-21",
+      "url": "https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/establish-provenance-and-integrity/prevent-release-changes",
+      "verifiedAt": "2026-08-22",
       "reviewIntervalDays": 31,
-      "covers": ["immutable releases", "release asset immutability"]
+      "covers": ["immutable releases", "draft asset upload", "release publication"]
     },
     {
       "id": "node-release-policy",

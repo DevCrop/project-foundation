@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FOUNDATION_VERSION = "1.0.0";
+const FOUNDATION_VERSION = "1.0.1";
 const OFFICIAL_UPSTREAM = "https://github.com/DevCrop/project-foundation";
 const VALID_RUNTIMES = new Set(["php"]);
 const VALID_PROFILES = new Set(["core", "php", "web", "assets", "typescript", "scss", "docker", "github"]);
@@ -906,6 +906,18 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
   if (await exists(dependencyPath)) {
     const dependency = await readFile(dependencyPath, "utf8");
     if (!/^  dependency-gate:/m.test(dependency) || !dependency.includes("name: dependency-gate")) errors.push("dependency-review.yml: missing stable check dependency-gate");
+  }
+  const releasePath = resolveInside(root, ".github/workflows/release.yml");
+  if (await exists(releasePath)) {
+    const release = await readFile(releasePath, "utf8");
+    const createIndex = release.indexOf("gh release create");
+    const uploadIndex = release.indexOf("gh release upload");
+    const publishIndex = release.indexOf("gh release edit");
+    const createCommand = createIndex >= 0 && uploadIndex > createIndex ? release.slice(createIndex, uploadIndex) : "";
+    const publishCommand = publishIndex >= 0 ? release.slice(publishIndex) : "";
+    if (createIndex < 0 || !/(?:^|\s)--draft(?=\s|\\|$)/m.test(createCommand)) errors.push("release.yml: release must be created as a draft before assets are uploaded");
+    if (uploadIndex < 0 || uploadIndex <= createIndex) errors.push("release.yml: release assets must be uploaded after draft creation");
+    if (publishIndex < 0 || publishIndex <= uploadIndex || !/(?:^|\s)--draft=false(?=\s|\\|$)/m.test(publishCommand)) errors.push("release.yml: release must be published only after asset upload");
   }
 
   const agentIndexes = files.filter((entry) => !entry.symlink && path.posix.basename(entry.path) === "AGENTS.md");
@@ -2077,10 +2089,30 @@ function tagRulesetPayload() {
   };
 }
 
-function comparableRuleset(value) {
-  if (!value || typeof value !== "object") return value;
-  const allowed = ["name", "target", "enforcement", "bypass_actors", "conditions", "rules"];
-  return Object.fromEntries(allowed.filter((key) => value[key] !== undefined).map((key) => [key, value[key]]));
+function comparableArrayItem(items, expected, index) {
+  if (!expected || typeof expected !== "object" || Array.isArray(expected)) return items[index];
+  for (const identity of ["type", "context"]) {
+    if (expected[identity] !== undefined) return items.find((item) => item?.[identity] === expected[identity]);
+  }
+  if (expected.actor_type !== undefined) {
+    return items.find((item) => item?.actor_type === expected.actor_type && item?.actor_id === expected.actor_id);
+  }
+  return items[index];
+}
+
+function projectComparableValue(value, expected) {
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(value) || value.length !== expected.length) return value;
+    return expected.map((item, index) => projectComparableValue(comparableArrayItem(value, item, index), item));
+  }
+  if (expected && typeof expected === "object") {
+    return Object.fromEntries(Object.keys(expected).map((key) => [key, projectComparableValue(value?.[key], expected[key])]));
+  }
+  return value;
+}
+
+function comparableRuleset(value, expected) {
+  return projectComparableValue(value, expected);
 }
 
 function canonicalJson(value) {
@@ -2107,8 +2139,9 @@ async function githubPlan(repo) {
       continue;
     }
     const detail = ghApi("GET", `${repo}/rulesets/${summary.id}`, undefined, { allowFailure: true });
-    if (!detail.ok || canonicalJson(comparableRuleset(detail.data)) !== canonicalJson(comparableRuleset(desired))) {
-      differences.push({ setting: `ruleset.${desired.name}`, current: detail.ok ? comparableRuleset(detail.data) : "unavailable", target: desired });
+    const current = detail.ok ? comparableRuleset(detail.data, desired) : "unavailable";
+    if (!detail.ok || canonicalJson(current) !== canonicalJson(desired)) {
+      differences.push({ setting: `ruleset.${desired.name}`, current, target: desired });
     }
   }
 
@@ -2479,6 +2512,7 @@ export {
   auditEvidence,
   capabilityApply,
   capabilityPlan,
+  comparableRuleset,
   compareVersions,
   initProject,
   main,
