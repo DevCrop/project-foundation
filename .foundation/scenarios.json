@@ -175,7 +175,7 @@
         {"id":"PF-SC-113","title":"Init output is deterministic","ruleIds":["PF-TEST-001"],"probe":{"type":"deterministic-init","profiles":"github,docker,typescript,scss","owner":"DevCrop"}},
         {"id":"PF-SC-114","title":"Init preserves unrelated existing files by refusing","ruleIds":["PF-CORE-002"],"probe":{"type":"init-conflict"}},
         {"id":"PF-SC-115","title":"Path traversal is rejected","ruleIds":["PF-SEC-002"],"probe":{"type":"path-reject","value":"../outside"}},
-        {"id":"PF-SC-116","title":"Tar traversal is rejected","ruleIds":["PF-SEC-002"],"probe":{"type":"tar-reject","value":"../escape.txt"}},
+        {"id":"PF-SC-116","title":"Git archive PAX metadata parses without weakening traversal rejection","ruleIds":["PF-GIT-005","PF-SEC-002"],"probe":{"type":"tar-pax-safety","traversal":"../escape.txt"}},
         {"id":"PF-SC-117","title":"Modified managed file blocks update before download","ruleIds":["PF-CORE-002"],"probe":{"type":"update-managed-conflict"}},
         {"id":"PF-SC-118","title":"Strict upstream validation succeeds","ruleIds":["PF-TEST-001"],"probe":{"type":"validate-pass"}},
         {"id":"PF-SC-119","title":"Expired source blocks strict release","ruleIds":["PF-EVIDENCE-004"],"probe":{"type":"validate-at","date":"2026-10-01","error":"source verification"}},

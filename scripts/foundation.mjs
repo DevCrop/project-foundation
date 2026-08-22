@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FOUNDATION_VERSION = "1.0.1";
+const FOUNDATION_VERSION = "1.0.2";
 const OFFICIAL_UPSTREAM = "https://github.com/DevCrop/project-foundation";
 const VALID_RUNTIMES = new Set(["php"]);
 const VALID_PROFILES = new Set(["core", "php", "web", "assets", "typescript", "scss", "docker", "github"]);
@@ -918,6 +918,7 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
     if (createIndex < 0 || !/(?:^|\s)--draft(?=\s|\\|$)/m.test(createCommand)) errors.push("release.yml: release must be created as a draft before assets are uploaded");
     if (uploadIndex < 0 || uploadIndex <= createIndex) errors.push("release.yml: release assets must be uploaded after draft creation");
     if (publishIndex < 0 || publishIndex <= uploadIndex || !/(?:^|\s)--draft=false(?=\s|\\|$)/m.test(publishCommand)) errors.push("release.yml: release must be published only after asset upload");
+    if (!/git archive[^\n]*HEAD\^\{tree\}/.test(release)) errors.push("release.yml: release archive must use the tree object to preserve updater compatibility");
   }
 
   const agentIndexes = files.filter((entry) => !entry.symlink && path.posix.basename(entry.path) === "AGENTS.md");
@@ -2220,7 +2221,8 @@ function parseTarGz(archive) {
     const dataEnd = dataStart + size;
     if (dataEnd > tar.length) throw new FoundationError(`Truncated tar entry: ${rawName}`);
     if (type === "0" || type === "\0") files.set(normalizeRelative(rawName), Buffer.from(tar.subarray(dataStart, dataEnd)));
-    else if (type !== "5") throw new FoundationError(`Unsupported tar entry type for ${rawName}`);
+    // Directories and PAX metadata do not materialize files; manifest hashes still prove every managed path.
+    else if (!["5", "g", "x"].includes(type)) throw new FoundationError(`Unsupported tar entry type for ${rawName}`);
     offset = dataStart + Math.ceil(size / 512) * 512;
   }
   const names = [...files.keys()];

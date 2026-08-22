@@ -346,8 +346,15 @@ async function runProbe(probe) {
     assert.throws(() => resolveInside(ROOT, probe.value), FoundationError);
     return;
   }
-  if (probe.type === "tar-reject") {
-    assert.throws(() => parseTarGz(createTarGz([[probe.value, "blocked"]])), FoundationError);
+  if (probe.type === "tar-pax-safety") {
+    const archived = spawnSync("git", ["archive", "--format=tar.gz", "--prefix=fixture/", "HEAD"], {
+      cwd: ROOT,
+      maxBuffer: 32 * 1024 * 1024,
+      windowsHide: true,
+    });
+    assert.equal(archived.status, 0, archived.stderr?.toString("utf8"));
+    assert.equal(parseTarGz(archived.stdout).has("package.json"), true);
+    assert.throws(() => parseTarGz(createTarGz([[probe.traversal, "blocked"]])), FoundationError);
     return;
   }
   if (probe.type === "update-managed-conflict") {
@@ -382,8 +389,8 @@ test.after(async () => {
 test("upstream passes strict validation", async () => {
   const result = await validateProject(ROOT, { strict: true, now: FIXED_NOW });
   assert.deepEqual(result.errors, []);
-  assert.equal(result.ruleCount, 55);
-  assert.equal(result.sourceCount, 50);
+  assert.equal(result.ruleCount, 56);
+  assert.equal(result.sourceCount, 51);
 });
 
 test("ruleset comparison ignores GitHub response defaults and detects semantic drift", () => {
@@ -423,6 +430,13 @@ test("release validation requires draft, upload, and publish ordering", async ()
   await writeFile(workflowPath, workflow.replace(" --draft --verify-tag", " --draft=false --verify-tag"), "utf8");
   const result = await validateProject(root, { strict: true, now: FIXED_NOW });
   assert.ok(result.errors.some((error) => error.includes("release must be created as a draft")));
+
+  const compatibilityRoot = await copyFoundation();
+  const compatibilityPath = path.join(compatibilityRoot, ".github", "workflows", "release.yml");
+  const compatibilityWorkflow = await readFile(compatibilityPath, "utf8");
+  await writeFile(compatibilityPath, compatibilityWorkflow.replace("HEAD^{tree}", "HEAD"), "utf8");
+  const compatibilityResult = await validateProject(compatibilityRoot, { strict: true, now: FIXED_NOW });
+  assert.ok(compatibilityResult.errors.some((error) => error.includes("tree object to preserve updater compatibility")));
 });
 
 test("full PHP initialization, page generation, and asset build are deterministic", async () => {

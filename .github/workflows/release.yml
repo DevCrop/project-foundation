@@ -47,7 +47,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p .release
-          git archive --format=tar.gz --prefix="project-foundation-v${VERSION}/" --output=".release/project-foundation-v${VERSION}.tar.gz" HEAD
+          git archive --format=tar.gz --prefix="project-foundation-v${VERSION}/" --output=".release/project-foundation-v${VERSION}.tar.gz" HEAD^{tree}
           cd .release
           sha256sum "project-foundation-v${VERSION}.tar.gz" > "project-foundation-v${VERSION}.tar.gz.sha256"
       - name: Publish GitHub release
