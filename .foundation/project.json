@@ -28,6 +28,7 @@
     "test": {"command": "composer", "args": ["test"]},
     "build": {"command": "npm", "args": ["run", "build"]},
     "start": {"command": "php", "args": ["-S", "127.0.0.1:8080", "-t", "public"]},
+    "dependencyValidate": {"command": "composer", "args": ["validate", "--strict", "--no-check-publish"]},
     "dependencyAudit": {"command": "composer", "args": ["audit", "--locked"]},
     "assetAudit": {"command": "npm", "args": ["audit", "--audit-level=moderate"]}
   },

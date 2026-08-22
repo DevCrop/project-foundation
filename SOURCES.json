@@ -15,6 +15,7 @@
     "learn.chatgpt.com",
     "nginx.org",
     "nodejs.org",
+    "phpunit.de",
     "sass-lang.com",
     "semver.org",
     "symfony.com",
@@ -273,7 +274,7 @@
       "url": "https://www.php.net/releases/index.php",
       "verifiedAt": "2026-08-22",
       "reviewIntervalDays": 31,
-      "covers": ["PHP 8.4 patch", "PHP 8.5 patch", "release checksums"]
+      "covers": ["PHP 8.2.33 security patch", "release checksums"]
     },
     {
       "id": "composer-download",
@@ -330,6 +331,22 @@
       "verifiedAt": "2026-08-22",
       "reviewIntervalDays": 31,
       "covers": ["route collection", "URL matching"]
+    },
+    {
+      "id": "symfony-7-4-release",
+      "provider": "Symfony",
+      "url": "https://symfony.com/releases/7.4",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["PHP 8.2 requirement", "7.4 LTS", "latest patch"]
+    },
+    {
+      "id": "phpunit-supported-versions",
+      "provider": "PHPUnit",
+      "url": "https://phpunit.de/supported-versions.html",
+      "verifiedAt": "2026-08-22",
+      "reviewIntervalDays": 31,
+      "covers": ["PHPUnit 11", "PHP 8.2 compatibility", "support lifecycle"]
     },
     {
       "id": "php-pdo-prepare",

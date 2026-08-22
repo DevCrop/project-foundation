@@ -103,14 +103,14 @@
         {"id":"PF-SC-066","title":"Development asset origin is allowlisted","ruleIds":["PF-SEC-002","PF-ASSET-001"],"probe":{"type":"contains","path":"src/Web/AssetManifest.php","value":"['127.0.0.1', 'localhost']"}},
         {"id":"PF-SC-067","title":"Asset traversal is rejected","ruleIds":["PF-SEC-002"],"probe":{"type":"contains","path":"src/Web/AssetManifest.php","value":"str_contains($path, '..')"}},
         {"id":"PF-SC-068","title":"Independent SCSS manifest entries become stylesheet links","ruleIds":["PF-ASSET-001"],"probe":{"type":"contains","path":"src/Web/AssetManifest.php","value":"str_ends_with($file, '.css')"}},
-        {"id":"PF-SC-069","title":"PHP range excludes unsupported future minor","ruleIds":["PF-PHP-001"],"probe":{"type":"json-equals","path":"composer.json","pointer":"/require/php","value":">=8.4.23 <8.6"}},
+        {"id":"PF-SC-069","title":"PHP range is restricted to the approved 8.2 line","ruleIds":["PF-PHP-001"],"probe":{"type":"json-equals","path":"composer.json","pointer":"/require/php","value":">=8.2.33 <8.3"}},
         {"id":"PF-SC-070","title":"Session security is a durable rule","ruleIds":["PF-SEC-003"],"probe":{"type":"contains","path":"FOUNDATION.md","value":"세션 ID 회전"}}
       ]
     },
     {
       "id": "dependencies-versions",
       "cases": [
-        {"id":"PF-SC-071","title":"PHP default patch is pinned","ruleIds":["PF-DEP-003"],"probe":{"type":"json-equals","path":".foundation/toolchain.json","pointer":"/php/default","value":"8.5.8"}},
+        {"id":"PF-SC-071","title":"PHP 8.2 default security patch is pinned","ruleIds":["PF-DEP-003"],"probe":{"type":"json-equals","path":".foundation/toolchain.json","pointer":"/php/default","value":"8.2.33"}},
         {"id":"PF-SC-072","title":"Composer default is pinned","ruleIds":["PF-DEP-003"],"probe":{"type":"json-equals","path":".foundation/toolchain.json","pointer":"/composer/default","value":"2.10.2"}},
         {"id":"PF-SC-073","title":"Node default is pinned","ruleIds":["PF-DEP-003"],"probe":{"type":"json-equals","path":".foundation/toolchain.json","pointer":"/node/default","value":"24.19.0"}},
         {"id":"PF-SC-074","title":"Vite dependency is exact","ruleIds":["PF-DEP-001","PF-DEP-002"],"probe":{"type":"json-equals","path":"package.json","pointer":"/devDependencies/vite","value":"8.2.2"}},
@@ -125,7 +125,7 @@
     {
       "id": "docker-compose",
       "cases": [
-        {"id":"PF-SC-081","title":"PHP base has tag and digest","ruleIds":["PF-DOCKER-003"],"probe":{"type":"contains","path":"Dockerfile","value":"ARG PHP_IMAGE=php:8.5.8-fpm-bookworm@sha256:"}},
+        {"id":"PF-SC-081","title":"PHP 8.2 base has tag and digest","ruleIds":["PF-DOCKER-003"],"probe":{"type":"contains","path":"Dockerfile","value":"ARG PHP_IMAGE=php:8.2.33-fpm-bookworm@sha256:"}},
         {"id":"PF-SC-082","title":"Composer dependencies use cache mount","ruleIds":["PF-DOCKER-001"],"probe":{"type":"contains","path":"Dockerfile","value":"--mount=type=cache,target=/tmp/composer-cache"}},
         {"id":"PF-SC-083","title":"Production runs as non-root","ruleIds":["PF-DOCKER-001","PF-SEC-004"],"probe":{"type":"contains","path":"Dockerfile","value":"USER www-data"}},
         {"id":"PF-SC-084","title":"Nginx runs as non-root","ruleIds":["PF-DOCKER-001","PF-SEC-004"],"probe":{"type":"contains","path":"Dockerfile","value":"USER nginx"}},

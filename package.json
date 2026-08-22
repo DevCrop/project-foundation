@@ -1,6 +1,6 @@
 {
   "name": "project-foundation",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "description": "Evidence-based PHP site starter, project rules, validation, and automation",
   "private": false,
   "type": "module",

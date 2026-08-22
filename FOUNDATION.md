@@ -183,12 +183,12 @@
 - Profiles: github
 - Authority: git-archive
 - Trigger: 이전 Foundation 버전이 읽을 정식 업데이트 archive를 만드는 경우
-- Do: 지원 중인 이전 updater가 읽을 수 있는 tree archive를 만들고 실제 이전 Release에서 update를 시험한다.
-- Don't: 현재 parser의 자체 생성 fixture만으로 배포 archive 호환성을 선언하지 않는다.
+- Do: 같은 메이저의 지원 중인 updater가 읽을 수 있는 tree archive를 만들고 실제 이전 Release에서 update를 시험한다. 메이저가 바뀌면 seed migration을 자동 적용하지 않고 원자적으로 중단한다.
+- Don't: 현재 parser의 자체 생성 fixture만으로 배포 archive 호환성을 선언하거나 메이저 변경에서 프로젝트 소유 seed를 덮어쓰지 않는다.
 - Exception: no
 - Enforced by: validator, ci
-- Evidence: 이전 immutable Release에서 최신 Release로 수행한 init·update smoke test
-- Rule: 업데이트 archive 형식은 실제 지원 중인 이전 Release parser와 호환되어야 한다.
+- Evidence: 같은 메이저 immutable Release의 update 성공 또는 이전 메이저 immutable Release의 무변경 중단 smoke test
+- Rule: 같은 메이저 업데이트 archive는 실제 지원 중인 이전 Release parser와 호환되어야 하며 메이저 변경은 승인된 seed migration 없이 자동 적용하지 않아야 한다.
 
 ## Security
 

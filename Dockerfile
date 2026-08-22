@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.12@sha256:93bfd3b68c109427185cd78b4779fc82b484b0b7618e36d0f104d4d801e66d25
 # check=error=true
 
-ARG PHP_IMAGE=php:8.5.8-fpm-bookworm@sha256:83c155135b9c4aa664fc6ce47020a10fe53576a0ed3468119cf2efec22fd16b9
+ARG PHP_IMAGE=php:8.2.33-fpm-bookworm@sha256:5623a1f394cfc9ec9710efc975db6d746618f1c3e047649232d5432a0b2f942c
 ARG COMPOSER_IMAGE=composer:2.10.2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040
 ARG NODE_IMAGE=node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03
 ARG NGINX_IMAGE=nginx:1.28.0-alpine@sha256:30f1c0d78e0ad60901648be663a710bdadf19e4c10ac6782c235200619158284
@@ -26,13 +26,18 @@ WORKDIR /app
 COPY --from=composer-bin /usr/bin/composer /usr/local/bin/composer
 COPY docker/php/conf.d/app.ini /usr/local/etc/php/conf.d/app.ini
 
-FROM composer-bin AS php-dependencies
+FROM php-base AS php-tooling
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM php-tooling AS php-dependencies
 WORKDIR /app
 COPY composer.json composer.lock ./
 RUN --mount=type=cache,target=/tmp/composer-cache \
     COMPOSER_CACHE_DIR=/tmp/composer-cache composer install --no-interaction --no-progress --prefer-dist
 
-FROM composer-bin AS php-production-dependencies
+FROM php-tooling AS php-production-dependencies
 WORKDIR /app
 COPY composer.json composer.lock ./
 RUN --mount=type=cache,target=/tmp/composer-cache \

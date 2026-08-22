@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FOUNDATION_VERSION = "1.0.3";
+const FOUNDATION_VERSION = "2.0.0";
 const OFFICIAL_UPSTREAM = "https://github.com/DevCrop/project-foundation";
 const VALID_RUNTIMES = new Set(["php"]);
 const VALID_PROFILES = new Set(["core", "php", "web", "assets", "typescript", "scss", "docker", "github"]);
@@ -136,6 +136,7 @@ const IGNORED_DIRECTORIES = new Set([
   "vendor",
   "tmp",
 ]);
+const PREPARED_PHP_TOOLING_IMAGES = new Map();
 const MAX_ARCHIVE_BYTES = 10 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 50 * 1024 * 1024;
 
@@ -467,6 +468,9 @@ function validateDockerfile(dockerfile, configuration, toolchain, errors) {
     }
     if (!dockerfile.includes(toolchain.docker.images.phpFpm)) errors.push("Dockerfile: PHP base image does not match toolchain.json");
     if (!dockerfile.includes(toolchain.docker.images.composer)) errors.push("Dockerfile: Composer image does not match toolchain.json");
+    if (!dockerfile.includes("FROM php-base AS php-tooling") || !dockerfile.includes("FROM php-tooling AS php-dependencies")) {
+      errors.push("Dockerfile: Composer commands must run from the pinned PHP tooling stage");
+    }
     if (!dockerfile.includes(toolchain.docker.dockerfileFrontend)) errors.push("Dockerfile: frontend does not match toolchain.json");
     if (!dockerfile.includes(`ARG NPM_VERSION=${toolchain.npm.default}`)) errors.push("Dockerfile: npm version does not match toolchain.json");
   }
@@ -720,7 +724,8 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
   if (await exists(composerPath)) {
     if (!(await exists(composerLockPath))) errors.push("composer.json requires committed composer.lock");
     const composer = await readJson(composerPath);
-    if (composer.require?.php !== ">=8.4.23 <8.6") errors.push("composer.json: PHP constraint must match the supported Foundation range");
+    if (composer.require?.php !== ">=8.2.33 <8.3") errors.push("composer.json: PHP constraint must match the supported Foundation range");
+    if (composer.config?.platform?.php !== "8.2.33") errors.push("composer.json: config.platform.php must pin the Foundation PHP version");
     for (const dependency of ["symfony/http-foundation", "symfony/routing"]) {
       if (!composer.require?.[dependency]) errors.push(`composer.json: missing required HTTP boundary dependency ${dependency}`);
     }
@@ -741,6 +746,7 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
     errors.push(error.message, ...error.details);
     manifest = { managedFiles: {}, activeProfiles: [] };
   }
+  if (manifest.schemaVersion !== 3) errors.push("manifest.json: unsupported schemaVersion");
   const managedEntries = Object.entries(manifest.managedFiles ?? {});
   if (!managedEntries.length) {
     const message = ".foundation/manifest.json: managedFiles is empty";
@@ -894,8 +900,12 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
     for (const version of toolchain.node.supported) {
       if (!quality.includes(`"${version}"`)) errors.push(`quality.yml: missing supported Node ${version}`);
     }
-    for (const image of [toolchain.docker.images.phpFpm84, toolchain.docker.images.phpFpm]) {
+    for (const image of [toolchain.docker.images.phpFpm]) {
       if (!quality.includes(`"${image}"`)) errors.push(`quality.yml: missing supported PHP image ${image}`);
+    }
+    const workflowPhpVersions = [...quality.matchAll(/^\s+- php:\s+"([^"]+)"\s*$/gm)].map((match) => match[1]);
+    if (JSON.stringify(workflowPhpVersions) !== JSON.stringify(toolchain.php.supported)) {
+      errors.push("quality.yml: PHP compatibility matrix must exactly match toolchain.json");
     }
     if (!/^  php-compatibility:/m.test(quality)) errors.push("quality.yml: missing PHP compatibility matrix");
     for (const check of REQUIRED_CHECKS.filter((name) => name !== "dependency-gate")) {
@@ -1060,6 +1070,7 @@ function projectConfiguration(projectName, runtime, profiles) {
       ? { command: "npm", args: ["run", "build"] }
       : { command: "composer", args: ["dump-autoload", "--classmap-authoritative", "--no-interaction"] },
     start: { command: "php", args: ["-S", "127.0.0.1:8080", "-t", "public"] },
+    dependencyValidate: { command: "composer", args: ["validate", "--strict", "--no-check-publish"] },
     dependencyAudit: { command: "composer", args: ["audit", "--locked"] },
   };
   if (assetsEnabled) {
@@ -1266,7 +1277,7 @@ async function initProject(root, { profile, projectName, runtime, owner }) {
     const managedFiles = {};
     for (const relativePath of selectedManaged) managedFiles[relativePath] = await hashFile(resolveInside(root, relativePath));
     const consumerManifest = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       foundationVersion: FOUNDATION_VERSION,
       mode: "consumer",
       activeProfiles: profiles,
@@ -1395,7 +1406,7 @@ async function adoptApply(root, planSha, confirmed) {
     for (const relativePath of selectedManaged) managedFiles[relativePath] = await hashFile(resolveInside(root, relativePath));
     const sourceManifest = await readJson(resolveInside(SCRIPT_ROOT, ".foundation/manifest.json"));
     await writeJsonAtomic(resolveInside(root, ".foundation/manifest.json"), {
-      schemaVersion: 2,
+      schemaVersion: 3,
       foundationVersion: FOUNDATION_VERSION,
       mode: "consumer",
       activeProfiles: plan.profiles,
@@ -1690,6 +1701,13 @@ function runCommand(command, args, { input, timeout = 10_000, cwd, env } = {}) {
   };
 }
 
+function dockerDaemonConnected(result) {
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+  return result.ok
+    && /^\d+\.\d+(?:\.\d+)?$/m.test(result.stdout)
+    && !/(?:cannot connect|error during connect|access is denied|permission denied)/i.test(output);
+}
+
 async function doctor(root) {
   const manifest = await readJson(resolveInside(root, ".foundation/manifest.json"));
   const configuration = await readJson(resolveInside(root, ".foundation/project.json"));
@@ -1701,7 +1719,7 @@ async function doctor(root) {
   const dockerProfile = manifest.activeProfiles.includes("docker");
   const php = runCommand("php", ["--version"], { cwd: root });
   const phpVersion = (php.stdout || php.stderr).match(/PHP\s+(\d+\.\d+\.\d+)/)?.[1] ?? php.stderr;
-  checks.push({ name: "PHP", ok: php.ok && compareVersions(phpVersion, toolchain.php.supported[0]) >= 0 && compareVersions(phpVersion, "8.6.0") < 0, value: phpVersion, required: !dockerProfile });
+  checks.push({ name: "PHP", ok: php.ok && compareVersions(phpVersion, toolchain.php.supported[0]) >= 0 && compareVersions(phpVersion, "8.3.0") < 0, value: phpVersion, required: !dockerProfile });
   const composer = runCommand("composer", ["--version"], { cwd: root });
   const composerVersion = (composer.stdout || composer.stderr).match(/\d+\.\d+\.\d+/)?.[0] ?? composer.stderr;
   checks.push({ name: "Composer", ok: composer.ok && compareVersions(composerVersion, toolchain.composer.minimum) >= 0, value: composerVersion, required: !dockerProfile });
@@ -1724,7 +1742,8 @@ async function doctor(root) {
     const buildxVersion = buildx.stdout.match(/v?\d+\.\d+\.\d+/)?.[0] ?? buildx.stderr;
     checks.push({ name: "Buildx", ok: buildx.ok && compareVersions(buildxVersion, toolchain.buildx.minimum) >= 0, value: buildxVersion, required: true });
     const daemon = runCommand("docker", ["info", "--format", "{{.ServerVersion}}"], { timeout: 15_000, cwd: root });
-    checks.push({ name: "Docker daemon", ok: daemon.ok, value: daemon.stdout || daemon.stderr, required: true });
+    const daemonOutput = [daemon.stdout, daemon.stderr].filter(Boolean).join("\n");
+    checks.push({ name: "Docker daemon", ok: dockerDaemonConnected(daemon), value: daemonOutput, required: true });
   }
 
   const make = runCommand("make", ["--version"], { cwd: root });
@@ -1755,9 +1774,30 @@ async function runProjectCommand(root, name) {
   let args = specification.args;
   const composerAvailable = command === "composer" ? runCommand("composer", ["--version"], { cwd: root }).ok : true;
   const useComposerContainer = command === "composer"
-    && (process.env.FOUNDATION_PHP_CONTAINER === "1" || (!composerAvailable && configuration.docker?.enabled));
+    && configuration.docker?.enabled
+    && (process.env.FOUNDATION_PHP_CONTAINER === "1" || !composerAvailable);
   if (useComposerContainer) {
-    const toolchain = await readJson(resolveInside(root, ".foundation/toolchain.json"));
+    const normalizedRoot = path.resolve(root);
+    let toolingImage = PREPARED_PHP_TOOLING_IMAGES.get(normalizedRoot);
+    if (!toolingImage) {
+      const imageBase = configuration.project.name.replace(/[^a-z0-9._-]/g, "-");
+      toolingImage = `${imageBase}:php-tooling`;
+      const dockerfile = normalizeRelative(configuration.docker.file);
+      const build = runCommand("docker", [
+        "buildx",
+        "build",
+        "--file",
+        dockerfile,
+        "--target",
+        "php-tooling",
+        "--tag",
+        toolingImage,
+        "--load",
+        ".",
+      ], { timeout: 20 * 60_000, cwd: root });
+      if (!build.ok) throw new FoundationError("Could not build the pinned PHP tooling image.", [build.stderr || build.stdout]);
+      PREPARED_PHP_TOOLING_IMAGES.set(normalizedRoot, toolingImage);
+    }
     command = "docker";
     args = [
       "run",
@@ -1766,7 +1806,7 @@ async function runProjectCommand(root, name) {
       `${path.resolve(root)}:/app`,
       "--workdir",
       "/app",
-      toolchain.docker.images.composer,
+      toolingImage,
       "composer",
       ...specification.args,
     ];
@@ -1938,7 +1978,7 @@ async function verifyProject(root, { base = "origin/main", scope = "all" } = {})
     }
   }
   if (["all", "dependency"].includes(scope)) {
-    for (const name of ["dependencyAudit", "assetAudit"]) {
+    for (const name of ["dependencyValidate", "dependencyAudit", "assetAudit"]) {
       const result = await runProjectCommand(root, name);
       results.push(result);
       if (!result.applicable && name === "dependencyAudit") warnings.push("No runtime dependency audit command is configured; GitHub capability detection will report this limitation.");
@@ -2261,6 +2301,16 @@ async function updateProject(root, requestedVersion) {
 
   const customBase = process.env.NODE_ENV === "test" ? process.env.FOUNDATION_RELEASE_BASE_URL : undefined;
   const version = await resolveUpdateVersion(requestedVersion, customBase);
+  const currentVersion = String(current.foundationVersion ?? "");
+  if (!/^\d+\.\d+\.\d+$/.test(currentVersion)) throw new FoundationError("Consumer manifest has an invalid Foundation version.");
+  if (Number.parseInt(currentVersion, 10) !== Number.parseInt(version, 10)) {
+    throw new FoundationError(
+      `Major Foundation update ${currentVersion} -> ${version} requires an approved seed migration; automatic update refused.`,
+    );
+  }
+  if (current.schemaVersion !== 3) {
+    throw new FoundationError("Consumer manifest schema requires an approved migration; automatic update refused.");
+  }
   const base = customBase ?? `${OFFICIAL_UPSTREAM}/releases/download/v${version}`;
   const asset = `project-foundation-v${version}.tar.gz`;
   const archive = await download(`${base}/${asset}`);
@@ -2516,6 +2566,7 @@ export {
   capabilityPlan,
   comparableRuleset,
   compareVersions,
+  dockerDaemonConnected,
   initProject,
   main,
   parseArguments,
