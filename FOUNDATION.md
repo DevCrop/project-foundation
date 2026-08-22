@@ -164,6 +164,19 @@
 - Evidence: release check와 자산 SHA-256
 - Rule: 정식 릴리스의 모든 버전 표기와 체크섬은 동일한 불변 버전을 가리켜야 한다.
 
+### PF-GIT-004 — 불변 릴리스 게시
+
+- Level: MUST
+- Profiles: github
+- Authority: github-immutable-releases
+- Trigger: 정식 GitHub Release와 자산을 게시하는 경우
+- Do: draft Release를 만들고 모든 자산과 체크섬을 업로드한 뒤 마지막 단계에서 게시한다.
+- Don't: 자산이 없는 Release를 먼저 게시하거나 게시된 불변 Release의 자산을 교체하지 않는다.
+- Exception: no
+- Enforced by: validator, ci, github
+- Evidence: Release API의 `immutable: true`와 자산 digest
+- Rule: 정식 GitHub Release는 draft에 자산을 완성한 뒤 불변 상태로 게시해야 한다.
+
 ## Security
 
 ### PF-SEC-001 — 비밀값

@@ -149,7 +149,7 @@
         {"id":"PF-SC-097","title":"PR template requires file rationale","ruleIds":["PF-FILE-001"],"probe":{"type":"contains","path":".github/PULL_REQUEST_TEMPLATE.md","value":"## New files and folders"}},
         {"id":"PF-SC-098","title":"Unpinned action is rejected","ruleIds":["PF-SEC-004"],"probe":{"type":"mutation","name":"unpinned-action","error":"not pinned to a full commit SHA"}},
         {"id":"PF-SC-099","title":"pull_request_target is rejected","ruleIds":["PF-SEC-004"],"probe":{"type":"mutation","name":"pull-request-target","error":"pull_request_target is forbidden"}},
-        {"id":"PF-SC-100","title":"Release version has one changelog entry","ruleIds":["PF-GIT-003"],"probe":{"type":"contains","path":"CHANGELOG.md","value":"## 1.0.0 -"}}
+        {"id":"PF-SC-100","title":"Release assets are completed before immutable publication","ruleIds":["PF-GIT-003","PF-GIT-004"],"probe":{"type":"contains","path":".github/workflows/release.yml","value":"gh release edit \"$GITHUB_REF_NAME\" --draft=false"}}
       ]
     },
     {

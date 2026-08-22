@@ -22,6 +22,7 @@ import { gzipSync } from "node:zlib";
 import {
   FoundationError,
   MANAGED_PATHS,
+  comparableRuleset,
   parseTarGz,
   refreshManifest,
   resolveInside,
@@ -381,8 +382,47 @@ test.after(async () => {
 test("upstream passes strict validation", async () => {
   const result = await validateProject(ROOT, { strict: true, now: FIXED_NOW });
   assert.deepEqual(result.errors, []);
-  assert.equal(result.ruleCount, 54);
+  assert.equal(result.ruleCount, 55);
   assert.equal(result.sourceCount, 50);
+});
+
+test("ruleset comparison ignores GitHub response defaults and detects semantic drift", () => {
+  const expected = {
+    name: "main protection",
+    target: "branch",
+    rules: [
+      {
+        type: "pull_request",
+        parameters: {
+          allowed_merge_methods: ["squash"],
+          required_approving_review_count: 0,
+        },
+      },
+      {
+        type: "required_status_checks",
+        parameters: {
+          required_status_checks: [{ context: "foundation-policy" }, { context: "project-quality" }],
+        },
+      },
+    ],
+  };
+  const response = structuredClone(expected);
+  response.rules[0].parameters.required_reviewers = [];
+  response.rules[0].parameters.require_extra_approval_for_unattributed_changes = true;
+  response.rules.reverse();
+  assert.deepEqual(comparableRuleset(response, expected), expected);
+
+  response.rules.find((rule) => rule.type === "required_status_checks").parameters.required_status_checks.push({ context: "unexpected" });
+  assert.notDeepEqual(comparableRuleset(response, expected), expected);
+});
+
+test("release validation requires draft, upload, and publish ordering", async () => {
+  const root = await copyFoundation();
+  const workflowPath = path.join(root, ".github", "workflows", "release.yml");
+  const workflow = await readFile(workflowPath, "utf8");
+  await writeFile(workflowPath, workflow.replace(" --draft --verify-tag", " --draft=false --verify-tag"), "utf8");
+  const result = await validateProject(root, { strict: true, now: FIXED_NOW });
+  assert.ok(result.errors.some((error) => error.includes("release must be created as a draft")));
 });
 
 test("full PHP initialization, page generation, and asset build are deterministic", async () => {
