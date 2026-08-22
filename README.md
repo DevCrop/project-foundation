@@ -1,6 +1,6 @@
 # Project Foundation
 
-PHP 웹사이트를 위한 공통 규칙, 최소 파일 생성, SCSS·TypeScript·Vite, Nginx·PHP-FPM Docker, GitHub 운영과 AI 에이전트 검증을 제공하는 공개 MIT Template다. Foundation CLI만 Node를 사용하며 소비 애플리케이션은 PHP로 고정한다.
+PHP 8.2 웹사이트를 위한 공통 규칙, 최소 파일 생성, SCSS·TypeScript·Vite, Nginx·PHP-FPM Docker, GitHub 운영과 AI 에이전트 검증을 제공하는 공개 MIT Template다. Foundation CLI만 Node를 사용하며 소비 애플리케이션 런타임은 PHP 8.2로 고정한다.
 
 Foundation은 최대 파일 구조를 복사하지 않는다. 프로젝트 정보를 먼저 분류하고 승인된 Page만 명시적으로 추가한다. Capability는 동일 상태에 묶인 SHA-256 계획을 승인받은 뒤 원자적으로 적용한다.
 
@@ -45,6 +45,23 @@ Intake 작성
 ```
 
 에이전트의 설명은 증거가 아니다. 완료 판단에는 실제 파일·해시·공식 source ID·명령 종료 코드·테스트·API 응답만 사용한다.
+
+## Codex 작업 요청 계약
+
+Codex에 구현을 맡기기 전에 목표, 제외 범위, 실제 입력 파일·디자인, 페이지·URL, 필요한 서버 기능, 선택 Capability, 배포 조건, 성능 예산과 승인 경계를 전달한다. 값이 없으면 Codex가 임의로 채우지 않고 `Unverified`로 기록한다.
+
+```text
+Goal: 이번 작업이 끝났을 때 관찰 가능한 결과
+Out of scope: 이번 작업에서 만들지 않을 것
+Observed inputs: 저장소 경로, 디자인, API 공식 문서, 실제 실행 명령
+Pages and capabilities: 페이지·route·form·auth·DB·payment·three·motion 등
+Constraints: 런타임, 파일 생성 제한, 기존 type·SCSS API, 보안·성능 조건
+Unverified: 아직 결정되지 않은 항목
+Approval boundary: plan만 허용할지 apply까지 허용할지
+Acceptance: 실행해야 할 validate·test·build·Docker·브라우저 검사
+```
+
+Codex는 구현 전에 Intake gate를 먼저 보고한다. 보고에는 `Observed`, `Inferred`, `Unverified`, 차단 결정, 재사용할 기존 경로, 생성이 필요한 경로와 이유, 실행할 검증이 들어가야 한다. 구조·외부 연동·보안 경계가 미확인이면 코드를 생성하지 않고 질문 또는 plan에서 멈춘다. 이것은 에이전트의 추론을 사실로 인정하는 규칙이 아니라 추론을 검증 가능한 상태와 사용자 승인에 묶는 Project Foundation Policy다.
 
 ## 새 프로젝트
 
@@ -211,13 +228,15 @@ PR에는 적용 PF 규칙, 새 파일 책임, 의존성 검토, 실제 검증 �
 ## 업데이트와 릴리스
 
 ```text
-node scripts/foundation.mjs update --version 1.0.2
+node scripts/foundation.mjs update --version 2.0.0
 node scripts/foundation.mjs verify --base origin/main
 ```
 
-업데이트는 정식 Release 자산, 경로, 크기, 버전과 SHA-256을 검증한다. managed 파일이 수정됐으면 다운로드 전에 전체를 중단하고 `PROJECT.md`, `.foundation/project.json`, Page·Capability 설정과 다른 seed 파일을 덮어쓰지 않는다. Release tarball은 이전 updater가 읽을 수 있는 Git tree archive로 만들며 실제 이전 immutable Release에서 최신 버전으로 update를 시험한다.
+업데이트는 정식 Release 자산, 경로, 크기, 버전과 SHA-256을 검증한다. managed 파일이 수정됐으면 다운로드 전에 전체를 중단하고 `PROJECT.md`, `.foundation/project.json`, Page·Capability 설정과 다른 seed 파일을 덮어쓰지 않는다. 같은 메이저의 Release tarball은 이전 updater가 읽을 수 있는 Git tree archive로 만들고 실제 immutable Release에서 update를 시험한다. Dependency 검증은 애플리케이션용 Composer 설정에 맞춰 `composer validate --strict --no-check-publish`와 `composer audit --locked`를 각각 실행한다.
 
-정식 릴리스는 12개 그룹의 canonical scenario 120개, mutation 검사, PHP 8.4·8.5, Docker build·health, agent adapter, GitHub ruleset과 31일 이내 공식 출처를 모두 증명해야 한다. GitHub Release는 draft에 자산과 체크섬을 먼저 올린 뒤 불변 상태로 게시한다.
+메이저 버전 변경은 런타임·Docker·의존성 같은 프로젝트 소유 seed 계약이 달라질 수 있으므로 자동 update하지 않는다. v1에서 v2로 이동할 때는 PHP를 8.2.33으로 명시적으로 전환하고 Composer lock·Docker image를 다시 검증한 뒤 새 Foundation을 도입한다. 승인된 migration 없이 실행한 update는 파일을 바꾸기 전에 중단한다.
+
+정식 릴리스는 12개 그룹의 canonical scenario 120개, mutation 검사, PHP 8.2.33, Docker build·health, agent adapter, GitHub ruleset과 31일 이내 공식 출처를 모두 증명해야 한다. GitHub Release는 draft에 자산과 체크섬을 먼저 올린 뒤 불변 상태로 게시한다.
 
 ## 공식 기준
 

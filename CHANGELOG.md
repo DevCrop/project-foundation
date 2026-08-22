@@ -14,6 +14,28 @@
 
 ### Breaking
 
+## 2.0.0 - 2026-08-22
+
+### Changed
+
+- 소비 애플리케이션 런타임을 PHP 8.2.33 단일 기준으로 고정하고 Symfony 7.4 LTS·PHPUnit 11 호환 계약으로 전환
+- Composer 바이너리만 공식 Composer image에서 가져오고 install·lint·PHPStan·PHPUnit은 고정된 PHP 8.2.33 tooling stage에서 실행
+- Codex 작업 전에 필수 정보를 Observed·Inferred·Unverified로 분류하고 승인 경계를 확인하는 Intake gate 요청 형식 명시
+
+### Fixed
+
+- `docker info`가 연결·권한 오류를 함께 출력하는 경우 종료 코드만 보고 daemon을 정상으로 오인하지 않도록 doctor 판정 보강
+
+### Security
+
+- Page slug와 route 중복 검사에서 입력 기반 동적 정규식을 제거해 CodeQL `js/regex-injection` High 경고 2건 해소
+- 정규식을 조립하지 않는 고정 형식 비교와 slug·route 중복 회귀 테스트 추가
+
+### Breaking
+
+- PHP 8.4·8.5 seed 계약을 폐기하고 PHP 8.2.33만 지원한다. v1 소비 프로젝트의 `composer.json`, `composer.lock`, Dockerfile은 프로젝트 소유 파일이므로 자동 덮어쓰지 않으며 v2 update는 승인된 seed migration 없이는 원자적으로 중단한다.
+- Foundation manifest schema를 3으로 올리고 자동 update를 동일 메이저 버전으로 제한한다.
+
 ## 1.0.2 - 2026-08-22
 
 ### Fixed

@@ -81,10 +81,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - php: "8.4.23"
-            image: "php:8.4.23-fpm-bookworm@sha256:66a10c4b32b2f5886c32a4fb23c6cc3e727661e6a929c241befb335aaee0290e"
-          - php: "8.5.8"
-            image: "php:8.5.8-fpm-bookworm@sha256:83c155135b9c4aa664fc6ce47020a10fe53576a0ed3468119cf2efec22fd16b9"
+          - php: "8.2.33"
+            image: "php:8.2.33-fpm-bookworm@sha256:5623a1f394cfc9ec9710efc975db6d746618f1c3e047649232d5432a0b2f942c"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

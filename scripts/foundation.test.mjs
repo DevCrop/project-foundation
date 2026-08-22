@@ -23,6 +23,7 @@ import {
   FoundationError,
   MANAGED_PATHS,
   comparableRuleset,
+  dockerDaemonConnected,
   parseTarGz,
   refreshManifest,
   resolveInside,
@@ -390,7 +391,7 @@ test("upstream passes strict validation", async () => {
   const result = await validateProject(ROOT, { strict: true, now: FIXED_NOW });
   assert.deepEqual(result.errors, []);
   assert.equal(result.ruleCount, 56);
-  assert.equal(result.sourceCount, 51);
+  assert.equal(result.sourceCount, 53);
 });
 
 test("ruleset comparison ignores GitHub response defaults and detects semantic drift", () => {
@@ -423,6 +424,12 @@ test("ruleset comparison ignores GitHub response defaults and detects semantic d
   assert.notDeepEqual(comparableRuleset(response, expected), expected);
 });
 
+test("doctor rejects Docker daemon connection errors even with a zero status", () => {
+  assert.equal(dockerDaemonConnected({ ok: true, stdout: "28.0.4", stderr: "" }), true);
+  assert.equal(dockerDaemonConnected({ ok: true, stdout: "", stderr: "error during connect: Access is denied" }), false);
+  assert.equal(dockerDaemonConnected({ ok: true, stdout: "28.0.4", stderr: "permission denied" }), false);
+});
+
 test("release validation requires draft, upload, and publish ordering", async () => {
   const root = await copyFoundation();
   const workflowPath = path.join(root, ".github", "workflows", "release.yml");
@@ -446,6 +453,18 @@ test("full PHP initialization, page generation, and asset build are deterministi
     await initializeConsumer(root);
     const page = runCli(root, ["page", "add", "sub-1", "--path", "/sub-1", "--title", "Sub 1", "--scss", "--typescript"]);
     assert.equal(page.status, 0, page.stderr);
+
+    const homeViewPath = path.join(root, "resource", "views", "pages", "home.php");
+    const homeView = await readFile(homeViewPath, "utf8");
+    await rm(homeViewPath);
+    const duplicateSlug = runCli(root, ["page", "add", "home", "--path", "/new-home", "--title", "Duplicate Home"]);
+    assert.notEqual(duplicateSlug.status, 0);
+    assert.match(duplicateSlug.stderr, /Page already exists: home/);
+    await writeFile(homeViewPath, homeView, "utf8");
+
+    const duplicateRoute = runCli(root, ["page", "add", "another-page", "--path", "/sub-1", "--title", "Duplicate Route"]);
+    assert.notEqual(duplicateRoute.status, 0);
+    assert.match(duplicateRoute.stderr, /Route path already exists: \/sub-1/);
     assert.equal(runCli(root, ["validate", "--strict"]).status, 0);
   }
   assert.deepEqual(await snapshotTree(first), await snapshotTree(second));
@@ -464,7 +483,7 @@ test("adopt plan and apply preserve an existing README", async () => {
   assert.equal(runCli(root, ["validate", "--strict"]).status, 0);
 });
 
-test("verified update changes managed files and preserves Korean project text", async () => {
+test("verified same-major update changes managed files and preserves Korean project text", async () => {
   const consumer = await copyFoundation();
   await initializeConsumer(consumer, "docker,typescript,scss");
   const projectPath = path.join(consumer, "PROJECT.md");
@@ -472,11 +491,11 @@ test("verified update changes managed files and preserves Korean project text", 
   const originalProject = await readFile(projectPath, "utf8");
 
   const release = await copyFoundation();
-  await appendFile(path.join(release, "SECURITY.md"), "\nRelease 1.0.1 note.\n", "utf8");
-  const archive = await releaseArchive(release, "1.0.1");
-  const server = await serveRelease(archive, "1.0.1");
+  await appendFile(path.join(release, "SECURITY.md"), "\nRelease 2.0.1 note.\n", "utf8");
+  const archive = await releaseArchive(release, "2.0.1");
+  const server = await serveRelease(archive, "2.0.1");
   try {
-    const result = await runCliAsync(consumer, ["update", "--version", "1.0.1"], {
+    const result = await runCliAsync(consumer, ["update", "--version", "2.0.1"], {
       NODE_ENV: "test",
       FOUNDATION_RELEASE_BASE_URL: server.url,
     });
@@ -485,7 +504,43 @@ test("verified update changes managed files and preserves Korean project text", 
     await server.close();
   }
   assert.equal(await readFile(projectPath, "utf8"), originalProject);
-  assert.match(await readFile(path.join(consumer, "SECURITY.md"), "utf8"), /Release 1\.0\.1/);
+  assert.match(await readFile(path.join(consumer, "SECURITY.md"), "utf8"), /Release 2\.0\.1/);
+});
+
+test("major update is refused before download and leaves the consumer unchanged", async () => {
+  const consumer = await copyFoundation();
+  await initializeConsumer(consumer, "docker,typescript,scss");
+  const manifestPath = path.join(consumer, ".foundation", "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.foundationVersion = "1.0.2";
+  manifest.schemaVersion = 2;
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  const before = await snapshotTree(consumer);
+  const result = runCli(consumer, ["update", "--version", "2.0.0"], {
+    NODE_ENV: "test",
+    FOUNDATION_RELEASE_BASE_URL: "http://127.0.0.1:1",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /requires an approved seed migration/);
+  assert.deepEqual(await snapshotTree(consumer), before);
+});
+
+test("PHP compatibility workflow rejects a runtime outside the 8.2 toolchain", async () => {
+  const root = await copyFoundation();
+  const workflowPath = path.join(root, ".github", "workflows", "quality.yml");
+  const workflow = await readFile(workflowPath, "utf8");
+  await writeFile(workflowPath, workflow.replace('- php: "8.2.33"', '- php: "8.5.8"'), "utf8");
+  const result = await validateProject(root, { strict: true, now: FIXED_NOW });
+  assert.ok(result.errors.some((error) => error.includes("PHP compatibility matrix must exactly match")));
+});
+
+test("Composer dependency stages reject the unpinned Composer runtime", async () => {
+  const root = await copyFoundation();
+  const dockerfilePath = path.join(root, "Dockerfile");
+  const dockerfile = await readFile(dockerfilePath, "utf8");
+  await writeFile(dockerfilePath, dockerfile.replace("FROM php-tooling AS php-dependencies", "FROM composer-bin AS php-dependencies"), "utf8");
+  const result = await validateProject(root, { strict: true, now: FIXED_NOW });
+  assert.ok(result.errors.some((error) => error.includes("pinned PHP tooling stage")));
 });
 
 test("Codex hooks load context, block destructive commands, and stop once", async () => {
