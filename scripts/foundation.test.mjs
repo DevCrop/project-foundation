@@ -148,6 +148,17 @@ async function releaseArchive(source, version) {
   return createTarGz(files);
 }
 
+async function materializeArchive(archivePath) {
+  const root = await temporaryDirectory("project-foundation-release-");
+  const files = parseTarGz(await readFile(archivePath));
+  for (const [relativePath, data] of files) {
+    const destination = resolveInside(root, relativePath);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await writeFile(destination, data);
+  }
+  return root;
+}
+
 async function serveRelease(archive, version) {
   const checksum = createHash("sha256").update(archive).digest("hex");
   const server = createServer((request, response) => {
@@ -173,10 +184,10 @@ function jsonPointer(value, pointer) {
     .reduce((current, part) => current?.[part], value);
 }
 
-async function initializeConsumer(root, profiles = "github,docker,typescript,scss", owner = "DevCrop") {
+async function initializeConsumer(root, profiles = "github,docker,typescript,scss", owner = "DevCrop", scriptRoot = root) {
   const args = ["init", "--runtime", "php", "--profile", profiles, "--project-name", "scenario-site"];
   if (profiles.split(",").includes("github")) args.push("--owner", owner);
-  const result = runCli(root, args);
+  const result = runCli(root, args, {}, scriptRoot);
   assert.equal(result.status, 0, result.stderr);
   return result;
 }
@@ -444,7 +455,7 @@ test("trusted Dependabot cannot add, delete, rename, or modify non-dependency pa
   }
 });
 
-test("Node type definitions cannot exceed the minimum supported runtime major", async () => {
+test("Node type definitions cannot exceed the supported runtime majors", async () => {
   const root = await copyFoundation();
   const packagePath = path.join(root, "package.json");
   const lockPath = path.join(root, "package-lock.json");
@@ -455,7 +466,7 @@ test("Node type definitions cannot exceed the minimum supported runtime major", 
   await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
   await writeFile(lockPath, `${JSON.stringify(packageLock, null, 2)}\n`, "utf8");
   const result = await validateProject(root, { strict: true, now: FIXED_NOW });
-  assert.ok(result.errors.some((error) => error.includes("@types/node must be exact and match")));
+  assert.ok(result.errors.some((error) => error.includes("@types/node must be exact and use a supported Node major")));
 });
 
 test("ruleset comparison ignores GitHub response defaults and detects semantic drift", () => {
@@ -570,6 +581,90 @@ test("verified same-major update changes managed files and preserves Korean proj
   assert.equal(await readFile(projectPath, "utf8"), originalProject);
   assert.match(await readFile(path.join(consumer, "SECURITY.md"), "utf8"), /Release 2\.0\.1/);
 });
+
+test("same-major update preserves a legacy supported Node types seed", async () => {
+  const consumer = await copyFoundation();
+  await initializeConsumer(consumer, "docker,typescript,scss");
+  const packagePath = path.join(consumer, "package.json");
+  const lockPath = path.join(consumer, "package-lock.json");
+  const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+  const packageLock = JSON.parse(await readFile(lockPath, "utf8"));
+  packageJson.devDependencies["@types/node"] = "24.13.3";
+  packageLock.packages[""].devDependencies["@types/node"] = "24.13.3";
+  await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
+  await writeFile(lockPath, `${JSON.stringify(packageLock, null, 2)}\n`, "utf8");
+  const seedBefore = { package: await readFile(packagePath), lock: await readFile(lockPath) };
+
+  const release = await copyFoundation();
+  const archive = await releaseArchive(release, "2.0.3");
+  const server = await serveRelease(archive, "2.0.3");
+  try {
+    const result = await runCliAsync(consumer, ["update", "--version", "2.0.3"], {
+      NODE_ENV: "test",
+      FOUNDATION_RELEASE_BASE_URL: server.url,
+    });
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    await server.close();
+  }
+  assert.deepEqual(await readFile(packagePath), seedBefore.package);
+  assert.deepEqual(await readFile(lockPath), seedBefore.lock);
+  const validation = await validateProject(consumer, { strict: true, now: FIXED_NOW });
+  assert.deepEqual(validation.errors, []);
+  assert.ok(validation.warnings.some((warning) => warning.includes("consumer-owned seed remains compatible")));
+});
+
+test("update executes the downloaded validator and rolls back on its failure", async () => {
+  const consumer = await copyFoundation();
+  await initializeConsumer(consumer, "docker,typescript,scss");
+  const before = await snapshotTree(consumer);
+
+  const release = await copyFoundation();
+  const scriptPath = path.join(release, "scripts", "foundation.mjs");
+  const script = await readFile(scriptPath, "utf8");
+  const marker = "async function validateProject(root, { strict = false, now = new Date() } = {}) {\n  const errors = [];";
+  assert.ok(script.includes(marker));
+  await writeFile(scriptPath, script.replace(marker, `${marker.slice(0, -3)}["release validator sentinel"];`), "utf8");
+  const archive = await releaseArchive(release, "2.0.3");
+  const server = await serveRelease(archive, "2.0.3");
+  try {
+    const result = await runCliAsync(consumer, ["update", "--version", "2.0.3"], {
+      NODE_ENV: "test",
+      FOUNDATION_RELEASE_BASE_URL: server.url,
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /release validator sentinel/);
+  } finally {
+    await server.close();
+  }
+  assert.deepEqual(await snapshotTree(consumer), before);
+});
+
+if (process.env.FOUNDATION_PREVIOUS_RELEASE_ARCHIVE && process.env.FOUNDATION_CURRENT_RELEASE_ARCHIVE && process.env.FOUNDATION_CURRENT_RELEASE_VERSION) {
+  test("immutable previous Release updater accepts the current archive", async () => {
+    const previous = await materializeArchive(process.env.FOUNDATION_PREVIOUS_RELEASE_ARCHIVE);
+    const consumer = await temporaryDirectory("project-foundation-release-consumer-");
+    await initializeConsumer(consumer, "web,assets,typescript,scss,docker,github", "DevCrop", previous);
+    const seedPaths = ["PROJECT.md", ".foundation/project.json", "package.json", "package-lock.json", "Dockerfile"];
+    const seeds = Object.fromEntries(await Promise.all(seedPaths.map(async (relativePath) => [relativePath, await readFile(path.join(consumer, relativePath))])));
+    const archive = await readFile(process.env.FOUNDATION_CURRENT_RELEASE_ARCHIVE);
+    const server = await serveRelease(archive, process.env.FOUNDATION_CURRENT_RELEASE_VERSION);
+    try {
+      const result = await runCliAsync(consumer, ["update", "--version", process.env.FOUNDATION_CURRENT_RELEASE_VERSION], {
+        NODE_ENV: "test",
+        FOUNDATION_RELEASE_BASE_URL: server.url,
+      });
+      assert.equal(result.status, 0, result.stderr);
+    } finally {
+      await server.close();
+    }
+    const validation = runCli(consumer, ["validate", "--strict"]);
+    assert.equal(validation.status, 0, validation.stderr);
+    const manifest = JSON.parse(await readFile(path.join(consumer, ".foundation", "manifest.json"), "utf8"));
+    assert.equal(manifest.foundationVersion, process.env.FOUNDATION_CURRENT_RELEASE_VERSION);
+    for (const relativePath of seedPaths) assert.deepEqual(await readFile(path.join(consumer, relativePath)), seeds[relativePath]);
+  });
+}
 
 test("major update is refused before download and leaves the consumer unchanged", async () => {
   const consumer = await copyFoundation();
