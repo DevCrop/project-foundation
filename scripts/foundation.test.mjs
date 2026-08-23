@@ -425,6 +425,18 @@ test("a Dependabot-looking branch without the GitHub bot identity is rejected", 
   assert.ok(errors.some((error) => error.includes("Rule evidence")));
 });
 
+test("a human PR recognizes real multiline evidence sections", () => {
+  const event = {
+    pull_request: {
+      title: "fix(deps): harden dependency policy",
+      body: "## Rule evidence\n\nPF-GIT-006\n\n## New files and folders\n\nNone.\n\n## Dependency changes\n\nReviewed.",
+      user: { login: "DevCrop", type: "User" },
+      head: { ref: "fix/dependency-automation" },
+    },
+  };
+  assert.deepEqual(pullRequestPolicyErrors(event, "DevCrop", ["M\tpackage.json", "M\tpackage-lock.json"]), []);
+});
+
 test("trusted Dependabot cannot add, delete, rename, or modify non-dependency paths", () => {
   assert.deepEqual(dependabotChangeErrors(["M\tpackage.json", "M\t.github/workflows/quality.yml"]), []);
   for (const record of ["A\tpackage.json", "D\tcomposer.lock", "R100\tpackage.json\tREADME.md", "M\tREADME.md"]) {
