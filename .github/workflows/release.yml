@@ -50,6 +50,17 @@ jobs:
           git archive --format=tar.gz --prefix="project-foundation-v${VERSION}/" --output=".release/project-foundation-v${VERSION}.tar.gz" HEAD^{tree}
           cd .release
           sha256sum "project-foundation-v${VERSION}.tar.gz" > "project-foundation-v${VERSION}.tar.gz.sha256"
+      - name: Validate current Release consumer install
+        env:
+          FOUNDATION_PHP_CONTAINER: "1"
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p .release/current-consumer
+          tar -xzf ".release/project-foundation-v${VERSION}.tar.gz" -C .release/current-consumer
+          cd ".release/current-consumer/project-foundation-v${VERSION}"
+          node scripts/foundation.mjs init --runtime php --profile web,assets,typescript,scss,docker,github --project-name release-consumer --owner DevCrop
+          node scripts/foundation.mjs run install
+          node scripts/foundation.mjs verify --scope project
       - name: Validate previous immutable updater
         env:
           GH_TOKEN: ${{ github.token }}

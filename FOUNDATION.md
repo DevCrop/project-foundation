@@ -728,6 +728,19 @@
 - Evidence: dependabot ignore 설정과 toolchain 변경 PR
 - Rule: 자동 Node 타입 업데이트는 현재 최저 지원 Node major 범위 안에서만 수행한다.
 
+### PF-DEP-006 — 전체 의존성 설치 입구
+
+- Level: MUST
+- Profiles: php, assets
+- Authority: policy:project-foundation
+- Trigger: PHP runtime과 프런트 asset이 함께 활성화된 프로젝트의 의존성을 설치하는 경우
+- Do: `foundation run install`이 runtime `install` 다음 `assetsInstall`을 순서대로 실행하고 각 lockfile의 고정 버전을 설치하게 한다.
+- Don't: 한 ecosystem만 설치한 상태에서 통합 build·test·verify를 성공으로 보고하지 않는다.
+- Exception: no
+- Enforced by: validator, ci
+- Evidence: composer-cli-install, npm-ci, 실제 Release consumer install·build 결과
+- Rule: 공통 설치 입구는 활성화된 모든 의존성 ecosystem을 누락 없이 설치해야 한다.
+
 ## Docker and performance
 
 ### PF-DOCKER-001 — 다단계 이미지

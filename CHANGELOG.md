@@ -14,6 +14,17 @@
 
 ### Breaking
 
+## 2.0.3 - 2026-08-23
+
+### Added
+
+- asset 프로필이 활성화된 소비 프로젝트에서 `foundation run install`이 Composer runtime 설치 다음 `npm ci` asset 설치를 단일 입구로 실행하도록 보강
+- 현재 릴리스 아카이브를 실제 신규 소비 프로젝트로 초기화한 뒤 전체 설치와 PHP·asset build를 검증하는 릴리스 게이트 추가
+
+### Fixed
+
+- 신규 Release 소비본에서 runtime 의존성만 설치된 상태로 `verify --scope project`를 실행하면 Vite가 없어 build가 실패하던 설치 오케스트레이션 누락 수정
+
 ## 2.0.2 - 2026-08-23
 
 ### Fixed

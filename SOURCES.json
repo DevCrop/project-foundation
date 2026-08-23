@@ -160,7 +160,7 @@
       "id": "npm-ci",
       "provider": "npm",
       "url": "https://docs.npmjs.com/cli/commands/npm-ci/",
-      "verifiedAt": "2026-08-21",
+      "verifiedAt": "2026-08-23",
       "reviewIntervalDays": 31,
       "covers": ["frozen install", "package-lock.json", "allowScripts"]
     },
@@ -299,6 +299,14 @@
       "verifiedAt": "2026-08-22",
       "reviewIntervalDays": 31,
       "covers": ["latest stable", "maintenance policy", "installer checksum"]
+    },
+    {
+      "id": "composer-cli-install",
+      "provider": "Composer",
+      "url": "https://getcomposer.org/doc/03-cli.md#install-i",
+      "verifiedAt": "2026-08-23",
+      "reviewIntervalDays": 31,
+      "covers": ["install command", "composer.lock exact versions", "vendor directory"]
     },
     {
       "id": "composer-schema",

@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FOUNDATION_VERSION = "2.0.2";
+const FOUNDATION_VERSION = "2.0.3";
 const OFFICIAL_UPSTREAM = "https://github.com/DevCrop/project-foundation";
 const VALID_RUNTIMES = new Set(["php"]);
 const VALID_PROFILES = new Set(["core", "php", "web", "assets", "typescript", "scss", "docker", "github"]);
@@ -411,6 +411,7 @@ function validateProjectConfiguration(configuration, errors) {
       errors.push(`project.json: assets path is unsafe (${error.message})`);
     }
     if (!Array.isArray(configuration.assets.entries) || configuration.assets.entries.length === 0) errors.push("project.json: enabled assets require at least one entry");
+    if (!configuration.commands?.assetsInstall) errors.push("project.json: enabled assets require commands.assetsInstall");
   }
   if (configuration.docker?.enabled) {
     for (const field of ["file", "service"]) {
@@ -953,6 +954,20 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
     if (!/git archive[^\n]*HEAD\^\{tree\}/.test(release)) errors.push("release.yml: release archive must use the tree object to preserve updater compatibility");
     const compatibilityIndex = release.indexOf("FOUNDATION_PREVIOUS_RELEASE_ARCHIVE");
     const archiveIndex = release.indexOf("git archive");
+    const currentConsumerIndex = release.indexOf("- name: Validate current Release consumer install");
+    const previousConsumerStepIndex = release.indexOf("- name: Validate previous immutable updater");
+    const currentConsumerStep = currentConsumerIndex >= 0 && previousConsumerStepIndex > currentConsumerIndex
+      ? release.slice(currentConsumerIndex, previousConsumerStepIndex)
+      : "";
+    if (
+      currentConsumerIndex <= archiveIndex
+      || previousConsumerStepIndex <= currentConsumerIndex
+      || !currentConsumerStep.includes("node scripts/foundation.mjs init")
+      || !currentConsumerStep.includes("node scripts/foundation.mjs run install")
+      || !currentConsumerStep.includes("node scripts/foundation.mjs verify --scope project")
+    ) {
+      errors.push("release.yml: current Release archive must prove fresh consumer dependency installation before publication");
+    }
     if (compatibilityIndex < 0 || compatibilityIndex <= archiveIndex || compatibilityIndex >= createIndex) {
       errors.push("release.yml: previous immutable Release updater must verify the current archive before publication");
     }
@@ -1790,8 +1805,7 @@ async function doctor(root) {
   return checks;
 }
 
-async function runProjectCommand(root, name) {
-  const configuration = await readJson(resolveInside(root, ".foundation/project.json"));
+async function runConfiguredProjectCommand(root, configuration, name) {
   const specification = configuration.commands?.[name];
   if (!specification) return { name, applicable: false, ok: true, output: "not configured" };
   const errors = [];
@@ -1838,12 +1852,33 @@ async function runProjectCommand(root, name) {
       ...specification.args,
     ];
   }
-  const result = runCommand(command, args, { timeout: command === "docker" ? 600_000 : 120_000, cwd: root });
+  const dependencyInstall = ["install", "assetsInstall"].includes(name);
+  const result = runCommand(command, args, { timeout: command === "docker" || dependencyInstall ? 600_000 : 120_000, cwd: root });
   return {
     name,
     applicable: true,
     ok: result.ok,
     output: [result.stdout, result.stderr].filter(Boolean).join("\n"),
+  };
+}
+
+async function runProjectCommand(root, name) {
+  const configuration = await readJson(resolveInside(root, ".foundation/project.json"));
+  if (name !== "install") return runConfiguredProjectCommand(root, configuration, name);
+
+  const results = [];
+  for (const commandName of ["install", "assetsInstall"]) {
+    const result = await runConfiguredProjectCommand(root, configuration, commandName);
+    if (!result.applicable) continue;
+    results.push(result);
+    if (!result.ok) break;
+  }
+  if (!results.length) return { name, applicable: false, ok: true, output: "not configured" };
+  return {
+    name,
+    applicable: true,
+    ok: results.every((result) => result.ok),
+    output: results.map((result) => `[${result.name}]\n${result.output || "completed"}`).join("\n"),
   };
 }
 
