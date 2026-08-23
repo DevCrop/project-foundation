@@ -14,6 +14,18 @@
 
 ### Breaking
 
+## 2.0.1 - 2026-08-23
+
+### Fixed
+
+- 신뢰된 Dependabot PR이 사람용 PR template 섹션을 작성할 수 없어 `foundation-policy`에서 무조건 실패하던 자동화 충돌 수정
+- 성공한 Git 명령의 stderr 경고가 변경 파일 목록으로 섞이지 않도록 Git 출력 판정 분리
+
+### Security
+
+- `dependabot[bot]` actor·PR 작성자·Bot type·전용 브랜치를 모두 확인하고 수정 상태의 의존성 표면만 허용하도록 자동화 예외 제한
+- `@types/node`를 최저 지원 Node 22 계열로 맞추고 상위 major 자동 업데이트와 타입 표면 불일치를 차단
+
 ## 2.0.0 - 2026-08-22
 
 ### Changed

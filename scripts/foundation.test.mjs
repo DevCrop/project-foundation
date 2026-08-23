@@ -23,15 +23,18 @@ import {
   FoundationError,
   MANAGED_PATHS,
   comparableRuleset,
+  dependabotChangeErrors,
   dockerDaemonConnected,
+  isTrustedDependabotPullRequest,
   parseTarGz,
+  pullRequestPolicyErrors,
   refreshManifest,
   resolveInside,
   validateProject,
 } from "./foundation.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FIXED_NOW = new Date("2026-08-22T12:00:00Z");
+const FIXED_NOW = new Date("2026-08-23T12:00:00Z");
 const TEMPORARIES = new Set();
 const COPY_EXCLUDES = new Set([".git", ".tmp-init-check", "node_modules", "vendor", "dist", "build", ".release"]);
 
@@ -390,8 +393,57 @@ test.after(async () => {
 test("upstream passes strict validation", async () => {
   const result = await validateProject(ROOT, { strict: true, now: FIXED_NOW });
   assert.deepEqual(result.errors, []);
-  assert.equal(result.ruleCount, 56);
-  assert.equal(result.sourceCount, 53);
+  assert.equal(result.ruleCount, 60);
+  assert.equal(result.sourceCount, 55);
+});
+
+test("trusted Dependabot PRs replace narrative evidence with constrained machine evidence", () => {
+  const event = {
+    pull_request: {
+      title: "chore(deps-dev): bump @types/node from 22.20.0 to 22.20.1",
+      body: "Bumps @types/node.",
+      user: { login: "dependabot[bot]", type: "Bot" },
+      head: { ref: "dependabot/npm_and_yarn/types/node-22.20.1" },
+    },
+  };
+  assert.equal(isTrustedDependabotPullRequest(event, "dependabot[bot]"), true);
+  assert.deepEqual(pullRequestPolicyErrors(event, "dependabot[bot]", ["M\tpackage.json", "M\tpackage-lock.json"]), []);
+});
+
+test("a Dependabot-looking branch without the GitHub bot identity is rejected", () => {
+  const event = {
+    pull_request: {
+      title: "chore(deps): update a package",
+      body: "No evidence sections.",
+      user: { login: "human-user", type: "User" },
+      head: { ref: "dependabot/npm_and_yarn/spoof" },
+    },
+  };
+  assert.equal(isTrustedDependabotPullRequest(event, "human-user"), false);
+  const errors = pullRequestPolicyErrors(event, "human-user", ["M\tpackage.json"]);
+  assert.ok(errors.some((error) => error.includes("Branch name does not match policy")));
+  assert.ok(errors.some((error) => error.includes("Rule evidence")));
+});
+
+test("trusted Dependabot cannot add, delete, rename, or modify non-dependency paths", () => {
+  assert.deepEqual(dependabotChangeErrors(["M\tpackage.json", "M\t.github/workflows/quality.yml"]), []);
+  for (const record of ["A\tpackage.json", "D\tcomposer.lock", "R100\tpackage.json\tREADME.md", "M\tREADME.md"]) {
+    assert.ok(dependabotChangeErrors([record]).some((error) => error.includes("forbidden path or status")), record);
+  }
+});
+
+test("Node type definitions cannot exceed the minimum supported runtime major", async () => {
+  const root = await copyFoundation();
+  const packagePath = path.join(root, "package.json");
+  const lockPath = path.join(root, "package-lock.json");
+  const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+  const packageLock = JSON.parse(await readFile(lockPath, "utf8"));
+  packageJson.devDependencies["@types/node"] = "26.2.0";
+  packageLock.packages[""].devDependencies["@types/node"] = "26.2.0";
+  await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
+  await writeFile(lockPath, `${JSON.stringify(packageLock, null, 2)}\n`, "utf8");
+  const result = await validateProject(root, { strict: true, now: FIXED_NOW });
+  assert.ok(result.errors.some((error) => error.includes("@types/node must be exact and match")));
 });
 
 test("ruleset comparison ignores GitHub response defaults and detects semantic drift", () => {

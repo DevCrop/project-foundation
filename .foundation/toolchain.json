@@ -13,7 +13,8 @@
   "node": {
     "default": "24.19.0",
     "supported": ["22.23.2", "24.19.0"],
-    "range": ">=22.22.0 <25"
+    "range": ">=22.22.0 <25",
+    "typeDefinitionsMajor": 22
   },
   "npm": {
     "default": "12.0.2",

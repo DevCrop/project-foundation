@@ -190,6 +190,32 @@
 - Evidence: 같은 메이저 immutable Release의 update 성공 또는 이전 메이저 immutable Release의 무변경 중단 smoke test
 - Rule: 같은 메이저 업데이트 archive는 실제 지원 중인 이전 Release parser와 호환되어야 하며 메이저 변경은 승인된 seed migration 없이 자동 적용하지 않아야 한다.
 
+### PF-GIT-006 — Dependabot 신원 확인
+
+- Level: MUST
+- Profiles: github
+- Authority: github-dependabot-actions
+- Trigger: PR이 Dependabot 자동 변경이라고 주장하는 경우
+- Do: GitHub actor와 PR 작성자 login이 모두 `dependabot[bot]`이고 작성자 type이 Bot이며 head ref가 `dependabot/` 아래인지 확인한다.
+- Don't: 브랜치 이름이나 PR 제목만 보고 신뢰된 자동 변경으로 취급하지 않는다.
+- Exception: no
+- Enforced by: validator, ci
+- Evidence: pull request event의 actor·user·head ref
+- Rule: Dependabot 자동화 예외는 GitHub 이벤트의 봇 신원과 전용 브랜치가 함께 확인된 PR에만 적용한다.
+
+### PF-GIT-007 — 자동 의존성 증거 범위
+
+- Level: MUST
+- Profiles: github
+- Authority: policy:project-foundation
+- Trigger: 신뢰된 Dependabot PR이 사람용 PR 증거 섹션을 포함하지 않은 경우
+- Do: 수정 상태의 manifest·lockfile·Docker·Compose·GitHub Actions 파일만 허용하고 모든 기계 검사를 통과시킨다.
+- Don't: 파일 추가·삭제·이름 변경·허용 범위 밖 수정을 서술형 증거 없이 우회하지 않는다.
+- Exception: no
+- Enforced by: validator, ci
+- Evidence: name-status diff와 stable required checks
+- Rule: 신뢰된 Dependabot PR의 서술형 증거는 제한된 변경 경로와 기계 검증 결과로만 대체할 수 있다.
+
 ## Security
 
 ### PF-SEC-001 — 비밀값
@@ -675,6 +701,32 @@
 - Enforced by: validator, ci
 - Evidence: toolchain source와 호환 matrix
 - Rule: 도구와 런타임 버전은 공식 지원 상태와 재현 가능한 잠금 기준점에 연결한다.
+
+### PF-DEP-004 — Node 타입 표면
+
+- Level: MUST
+- Profiles: typescript
+- Authority: policy:project-foundation
+- Trigger: 둘 이상의 Node LTS에서 실행되는 TypeScript 코드를 검사하는 경우
+- Do: `@types/node`의 정확한 버전 major를 toolchain의 최저 지원 Node major와 일치시킨다.
+- Don't: 최저 지원 런타임에 없는 상위 Node API를 타입 검사 단계에서 허용하지 않는다.
+- Exception: no
+- Enforced by: validator, ci
+- Evidence: toolchain supported matrix와 package·lockfile 버전
+- Rule: Node 타입 정의의 major는 지원 런타임 중 가장 낮은 Node major를 초과해서는 안 된다.
+
+### PF-DEP-005 — Node 타입 major 갱신
+
+- Level: MUST
+- Profiles: github, typescript
+- Authority: github-dependabot-options
+- Trigger: Dependabot이 `@types/node` 버전 업데이트를 계획하는 경우
+- Do: 현재 toolchain major 안의 갱신만 허용하고 major 변경은 런타임 지원 기준 변경과 함께 사람이 검토한다.
+- Don't: toolchain 변경 없이 `@types/node` major 업데이트 PR을 자동 생성·병합하지 않는다.
+- Exception: yes
+- Enforced by: validator, ci, review
+- Evidence: dependabot ignore 설정과 toolchain 변경 PR
+- Rule: 자동 Node 타입 업데이트는 현재 최저 지원 Node major 범위 안에서만 수행한다.
 
 ## Docker and performance
 

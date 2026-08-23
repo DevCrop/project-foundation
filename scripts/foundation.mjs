@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FOUNDATION_VERSION = "2.0.0";
+const FOUNDATION_VERSION = "2.0.1";
 const OFFICIAL_UPSTREAM = "https://github.com/DevCrop/project-foundation";
 const VALID_RUNTIMES = new Set(["php"]);
 const VALID_PROFILES = new Set(["core", "php", "web", "assets", "typescript", "scss", "docker", "github"]);
@@ -99,6 +99,12 @@ const PROFILE_PATHS = {
 const REQUIRED_CHECKS = ["foundation-policy", "project-quality", "container", "dependency-gate"];
 const BRANCH_PATTERN = /^(feature|fix|security|docs|refactor|test|chore|release)\/[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const PR_TITLE_PATTERN = /^(feat|fix|docs|refactor|test|chore|build|ci|perf|revert)(\([a-z0-9._/-]+\))?!?: .+$/;
+const DEPENDABOT_LOGIN = "dependabot[bot]";
+const DEPENDABOT_CHANGE_PATTERNS = [
+  /^(?:package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|bun\.lockb|composer\.json|composer\.lock|compose\.yaml|compose\.yml)$/,
+  /(^|\/)Dockerfile$/,
+  /^\.github\/workflows\/[^/]+\.(?:yml|yaml)$/,
+];
 const ROOT_TEXT_FILES = new Set([
   ".dockerignore",
   ".editorconfig",
@@ -780,6 +786,18 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
       packageJson = await readJson(resolveInside(root, "package.json"));
       if (packageJson.engines?.node !== toolchain.node.range) errors.push("package.json: engines.node does not match toolchain.json");
       if (packageJson.packageManager !== `npm@${toolchain.npm.default}`) errors.push("package.json: packageManager does not match toolchain.json");
+      const supportedNodeMajors = (toolchain.node.supported ?? []).map((version) => parseVersion(version)?.[0]).filter(Number.isInteger);
+      const minimumNodeMajor = supportedNodeMajors.length ? Math.min(...supportedNodeMajors) : null;
+      if (!Number.isInteger(toolchain.node.typeDefinitionsMajor) || toolchain.node.typeDefinitionsMajor !== minimumNodeMajor) {
+        errors.push("toolchain.json: node.typeDefinitionsMajor must match the minimum supported Node major");
+      }
+      if (manifest.mode === "upstream" || (manifest.activeProfiles ?? []).includes("typescript")) {
+        const nodeTypes = packageJson.devDependencies?.["@types/node"];
+        const nodeTypesVersion = parseVersion(nodeTypes);
+        if (!/^\d+\.\d+\.\d+$/.test(nodeTypes ?? "") || nodeTypesVersion?.[0] !== toolchain.node.typeDefinitionsMajor) {
+          errors.push("package.json: @types/node must be exact and match toolchain.json node.typeDefinitionsMajor");
+        }
+      }
       if (packageJson.devDependencies?.sass) {
         const packageLock = await readJson(resolveInside(root, "package-lock.json"));
         const watcherVersion = packageLock.packages?.["node_modules/@parcel/watcher"]?.version;
@@ -1911,51 +1929,95 @@ async function runContainerCommand(root, mode) {
 
 function gitOutput(root, args) {
   const result = spawnSync("git", args, { cwd: root, encoding: "utf8", timeout: 30_000, windowsHide: true });
-  return { ok: result.status === 0, output: `${result.stdout ?? ""}${result.stderr ?? ""}`.trim() };
+  const stdout = String(result.stdout ?? "").trim();
+  const stderr = String(result.stderr ?? "").trim();
+  return { ok: result.status === 0, output: result.status === 0 ? stdout : `${stdout}\n${stderr}`.trim() };
+}
+
+function isTrustedDependabotPullRequest(event, actor = "") {
+  const pullRequest = event?.pull_request;
+  return actor === DEPENDABOT_LOGIN
+    && pullRequest?.user?.login === DEPENDABOT_LOGIN
+    && pullRequest?.user?.type === "Bot"
+    && /^dependabot\/.+/.test(pullRequest?.head?.ref ?? "");
+}
+
+function dependabotChangeErrors(lines) {
+  if (!lines.length) return ["Trusted Dependabot PR has no changed dependency files"];
+  const errors = [];
+  for (const line of lines) {
+    const fields = line.split("\t");
+    const status = fields[0] ?? "";
+    const relativePath = fields.at(-1) ?? "";
+    if (status !== "M" || !DEPENDABOT_CHANGE_PATTERNS.some((pattern) => pattern.test(relativePath))) {
+      errors.push(`Trusted Dependabot PR changed a forbidden path or status: ${line}`);
+    }
+  }
+  return errors;
+}
+
+function pullRequestPolicyErrors(event, actor, changedLines, { bootstrap = false } = {}) {
+  const pullRequest = event?.pull_request;
+  if (!pullRequest) return [];
+  const errors = [];
+  const title = pullRequest.title ?? "";
+  const body = pullRequest.body ?? "";
+  const branch = pullRequest.head?.ref ?? "";
+  const trustedDependabot = isTrustedDependabotPullRequest(event, actor);
+
+  if (branch && !bootstrap && !trustedDependabot && !BRANCH_PATTERN.test(branch)) errors.push(`Branch name does not match policy: ${branch}`);
+  if (!PR_TITLE_PATTERN.test(title)) errors.push(`PR title is not Conventional Commit format: ${title}`);
+  if (trustedDependabot) {
+    errors.push(...dependabotChangeErrors(changedLines));
+    return errors;
+  }
+  if (!/^## Rule evidence\s*$/m.test(body)) errors.push("PR body is missing the Rule evidence section");
+  if (changedLines.some((line) => line.startsWith("A\t")) && !/^## New files and folders\s*$/m.test(body)) {
+    errors.push("PR body is missing the New files and folders section");
+  }
+  if (changedLines.some((line) => /(^|\/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Dockerfile|dependabot\.yml)$/.test(line.split("\t").at(-1)))) {
+    if (!/^## Dependency changes\s*$/m.test(body)) errors.push("PR body is missing the Dependency changes section");
+  }
+  return errors;
 }
 
 async function pullRequestEvidence(root, base, errors, warnings) {
   const branch = gitOutput(root, ["branch", "--show-current"]);
-  if (branch.ok && branch.output && !["main", "master"].includes(branch.output)) {
-    let bootstrap = false;
-    if (branch.output === "codex/foundation-v1") {
-      const manifest = await readJson(resolveInside(root, ".foundation/manifest.json"));
-      const configuration = await readJson(resolveInside(root, ".foundation/project.json"));
-      bootstrap = manifest.mode === "upstream" && configuration.project?.name === "project-foundation";
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  let event;
+  if (eventPath && await exists(eventPath)) {
+    try {
+      event = await readJson(eventPath);
+    } catch (error) {
+      errors.push(error.message);
+      return;
     }
-    if (!bootstrap && !branch.output.startsWith("dependabot/") && !BRANCH_PATTERN.test(branch.output)) errors.push(`Branch name does not match policy: ${branch.output}`);
   }
 
-  const eventPath = process.env.GITHUB_EVENT_PATH;
-  if (!eventPath || !(await exists(eventPath))) {
+  const eventBranch = event?.pull_request?.head?.ref ?? "";
+  const branchName = eventBranch || branch.output;
+  let bootstrap = false;
+  if (branchName === "codex/foundation-v1") {
+    const manifest = await readJson(resolveInside(root, ".foundation/manifest.json"));
+    const configuration = await readJson(resolveInside(root, ".foundation/project.json"));
+    bootstrap = manifest.mode === "upstream" && configuration.project?.name === "project-foundation";
+  }
+  if (!event?.pull_request && branch.ok && branchName && !["main", "master"].includes(branchName)) {
+    if (!bootstrap && !BRANCH_PATTERN.test(branchName)) errors.push(`Branch name does not match policy: ${branchName}`);
+  }
+
+  if (!event?.pull_request) {
     warnings.push("PR title and evidence checks are only available in a pull_request event.");
     return;
   }
-  let event;
-  try {
-    event = await readJson(eventPath);
-  } catch (error) {
-    errors.push(error.message);
-    return;
-  }
-  if (!event.pull_request) return;
-  const title = event.pull_request.title ?? "";
-  const body = event.pull_request.body ?? "";
-  if (!PR_TITLE_PATTERN.test(title)) errors.push(`PR title is not Conventional Commit format: ${title}`);
-  if (!/^## Rule evidence\s*$/m.test(body)) errors.push("PR body is missing the Rule evidence section");
 
   const changed = gitOutput(root, ["diff", "--name-status", `${base}...HEAD`]);
   if (!changed.ok) {
-    warnings.push(`Could not inspect changed files against ${base}: ${changed.output}`);
+    errors.push(`Could not inspect changed files against ${base}: ${changed.output}`);
     return;
   }
   const lines = changed.output.split(/\r?\n/).filter(Boolean);
-  if (lines.some((line) => line.startsWith("A\t")) && !/^## New files and folders\s*$/m.test(body)) {
-    errors.push("PR body is missing the New files and folders section");
-  }
-  if (lines.some((line) => /(^|\/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Dockerfile|dependabot\.yml)$/.test(line.split("\t").at(-1)))) {
-    if (!/^## Dependency changes\s*$/m.test(body)) errors.push("PR body is missing the Dependency changes section");
-  }
+  errors.push(...pullRequestPolicyErrors(event, process.env.GITHUB_ACTOR ?? "", lines, { bootstrap }));
 }
 
 async function verifyProject(root, { base = "origin/main", scope = "all" } = {}) {
@@ -2567,7 +2629,9 @@ export {
   comparableRuleset,
   compareVersions,
   dockerDaemonConnected,
+  dependabotChangeErrors,
   initProject,
+  isTrustedDependabotPullRequest,
   main,
   parseArguments,
   parseProfiles,
@@ -2575,6 +2639,7 @@ export {
   parseTarGz,
   refreshManifest,
   resolveInside,
+  pullRequestPolicyErrors,
   updateProject,
   validateProject,
   verifyProject,

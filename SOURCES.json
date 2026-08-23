@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-22",
+  "verifiedAt": "2026-08-23",
   "allowedDomains": [
     "code.claude.com",
     "cursor.com",
@@ -123,6 +123,22 @@
       "verifiedAt": "2026-08-21",
       "reviewIntervalDays": 31,
       "covers": ["npm", "docker", "docker-compose", "github-actions"]
+    },
+    {
+      "id": "github-dependabot-actions",
+      "provider": "GitHub",
+      "url": "https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-on-actions",
+      "verifiedAt": "2026-08-23",
+      "reviewIntervalDays": 31,
+      "covers": ["dependabot actor", "pull request user", "workflow permissions", "secret restrictions"]
+    },
+    {
+      "id": "github-dependabot-options",
+      "provider": "GitHub",
+      "url": "https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference",
+      "verifiedAt": "2026-08-23",
+      "reviewIntervalDays": 31,
+      "covers": ["ignore", "dependency-name", "update-types", "semver-major"]
     },
     {
       "id": "github-immutable-releases",
