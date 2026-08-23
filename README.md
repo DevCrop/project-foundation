@@ -225,10 +225,12 @@ dependency-gate
 
 PR에는 적용 PF 규칙, 새 파일 책임, 의존성 검토, 실제 검증 결과, 생략 검사와 남은 위험을 기록한다. Actions는 전체 commit SHA, 최소 token permission, timeout, concurrency를 사용하며 `pull_request_target`과 PR secret을 금지한다.
 
+공식 GitHub 이벤트에서 actor·PR 작성자·Bot type·`dependabot/` head ref가 모두 확인된 Dependabot PR만 사람용 증거 섹션을 생략할 수 있다. 이 경우에도 수정 상태의 manifest·lockfile·Docker·Compose·Actions 파일만 허용되며 stable required check를 모두 통과해야 한다. `@types/node` 자동 갱신은 최저 지원 Node major 안으로 제한한다.
+
 ## 업데이트와 릴리스
 
 ```text
-node scripts/foundation.mjs update --version 2.0.0
+node scripts/foundation.mjs update --version 2.0.1
 node scripts/foundation.mjs verify --base origin/main
 ```
 
