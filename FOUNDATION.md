@@ -708,12 +708,12 @@
 - Profiles: typescript
 - Authority: policy:project-foundation
 - Trigger: 둘 이상의 Node LTS에서 실행되는 TypeScript 코드를 검사하는 경우
-- Do: `@types/node`의 정확한 버전 major를 toolchain의 최저 지원 Node major와 일치시킨다.
-- Don't: 최저 지원 런타임에 없는 상위 Node API를 타입 검사 단계에서 허용하지 않는다.
+- Do: 새 seed는 `@types/node`의 정확한 버전 major를 최저 지원 Node major와 맞추고, 기존 소비 seed는 지원 matrix 안의 major만 유지한다.
+- Don't: 지원 Node matrix 밖의 타입 major를 허용하거나 프로젝트 소유 seed를 Foundation update로 덮어쓰지 않는다.
 - Exception: no
 - Enforced by: validator, ci
 - Evidence: toolchain supported matrix와 package·lockfile 버전
-- Rule: Node 타입 정의의 major는 지원 런타임 중 가장 낮은 Node major를 초과해서는 안 된다.
+- Rule: 새 Node 타입 seed는 최저 지원 major를 사용하고 기존 소비 seed는 지원되는 Node major 범위 안에서만 보존한다.
 
 ### PF-DEP-005 — Node 타입 major 갱신
 
@@ -721,7 +721,7 @@
 - Profiles: github, typescript
 - Authority: github-dependabot-options
 - Trigger: Dependabot이 `@types/node` 버전 업데이트를 계획하는 경우
-- Do: 현재 toolchain major 안의 갱신만 허용하고 major 변경은 런타임 지원 기준 변경과 함께 사람이 검토한다.
+- Do: 새 seed의 현재 toolchain major 안의 갱신만 허용하고 major 변경은 런타임 지원 기준 변경과 함께 사람이 검토한다.
 - Don't: toolchain 변경 없이 `@types/node` major 업데이트 PR을 자동 생성·병합하지 않는다.
 - Exception: yes
 - Enforced by: validator, ci, review

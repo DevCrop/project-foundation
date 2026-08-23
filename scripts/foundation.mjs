@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const FOUNDATION_VERSION = "2.0.1";
+const FOUNDATION_VERSION = "2.0.2";
 const OFFICIAL_UPSTREAM = "https://github.com/DevCrop/project-foundation";
 const VALID_RUNTIMES = new Set(["php"]);
 const VALID_PROFILES = new Set(["core", "php", "web", "assets", "typescript", "scss", "docker", "github"]);
@@ -794,8 +794,12 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
       if (manifest.mode === "upstream" || (manifest.activeProfiles ?? []).includes("typescript")) {
         const nodeTypes = packageJson.devDependencies?.["@types/node"];
         const nodeTypesVersion = parseVersion(nodeTypes);
-        if (!/^\d+\.\d+\.\d+$/.test(nodeTypes ?? "") || nodeTypesVersion?.[0] !== toolchain.node.typeDefinitionsMajor) {
-          errors.push("package.json: @types/node must be exact and match toolchain.json node.typeDefinitionsMajor");
+        if (!/^\d+\.\d+\.\d+$/.test(nodeTypes ?? "") || !supportedNodeMajors.includes(nodeTypesVersion?.[0])) {
+          errors.push("package.json: @types/node must be exact and use a supported Node major");
+        } else if (nodeTypesVersion[0] !== toolchain.node.typeDefinitionsMajor) {
+          const message = "package.json: @types/node differs from the minimum-runtime seed baseline";
+          if (manifest.mode === "upstream") errors.push(message);
+          else warnings.push(`${message}; the consumer-owned seed remains compatible but should be reviewed explicitly`);
         }
       }
       if (packageJson.devDependencies?.sass) {
@@ -947,6 +951,11 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
     if (uploadIndex < 0 || uploadIndex <= createIndex) errors.push("release.yml: release assets must be uploaded after draft creation");
     if (publishIndex < 0 || publishIndex <= uploadIndex || !/(?:^|\s)--draft=false(?=\s|\\|$)/m.test(publishCommand)) errors.push("release.yml: release must be published only after asset upload");
     if (!/git archive[^\n]*HEAD\^\{tree\}/.test(release)) errors.push("release.yml: release archive must use the tree object to preserve updater compatibility");
+    const compatibilityIndex = release.indexOf("FOUNDATION_PREVIOUS_RELEASE_ARCHIVE");
+    const archiveIndex = release.indexOf("git archive");
+    if (compatibilityIndex < 0 || compatibilityIndex <= archiveIndex || compatibilityIndex >= createIndex) {
+      errors.push("release.yml: previous immutable Release updater must verify the current archive before publication");
+    }
   }
 
   const agentIndexes = files.filter((entry) => !entry.symlink && path.posix.basename(entry.path) === "AGENTS.md");
@@ -2413,8 +2422,20 @@ async function updateProject(root, requestedVersion) {
       managedFiles: Object.fromEntries(selectedManaged.map((relativePath) => [relativePath, sourceManifest.managedFiles[relativePath]])),
     };
     await writeJsonAtomic(resolveInside(stage, ".foundation/manifest.json"), stagedManifest);
-    const stagedValidation = await validateProject(stage, { strict: false });
-    if (stagedValidation.errors.length) throw new FoundationError("Updated files failed validation in staging.", stagedValidation.errors);
+    const stagedValidation = spawnSync(process.execPath, [resolveInside(stage, "scripts/foundation.mjs"), "validate", "--strict"], {
+      cwd: stage,
+      encoding: "utf8",
+      timeout: 120_000,
+      windowsHide: true,
+      env: process.env,
+    });
+    if (stagedValidation.status !== 0) {
+      const output = `${stagedValidation.stdout ?? ""}${stagedValidation.stderr ?? ""}`.trim();
+      throw new FoundationError(
+        "Updated files failed validation with the downloaded Foundation validator in staging.",
+        output ? output.split(/\r?\n/) : [stagedValidation.error?.message ?? "Staged validator failed without output"],
+      );
+    }
 
     const updatePaths = [...selectedManaged, ".foundation/manifest.json"];
     const snapshots = await snapshotPaths(root, updatePaths);

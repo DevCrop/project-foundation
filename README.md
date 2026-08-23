@@ -225,16 +225,18 @@ dependency-gate
 
 PR에는 적용 PF 규칙, 새 파일 책임, 의존성 검토, 실제 검증 결과, 생략 검사와 남은 위험을 기록한다. Actions는 전체 commit SHA, 최소 token permission, timeout, concurrency를 사용하며 `pull_request_target`과 PR secret을 금지한다.
 
-공식 GitHub 이벤트에서 actor·PR 작성자·Bot type·`dependabot/` head ref가 모두 확인된 Dependabot PR만 사람용 증거 섹션을 생략할 수 있다. 이 경우에도 수정 상태의 manifest·lockfile·Docker·Compose·Actions 파일만 허용되며 stable required check를 모두 통과해야 한다. `@types/node` 자동 갱신은 최저 지원 Node major 안으로 제한한다.
+공식 GitHub 이벤트에서 actor·PR 작성자·Bot type·`dependabot/` head ref가 모두 확인된 Dependabot PR만 사람용 증거 섹션을 생략할 수 있다. 이 경우에도 수정 상태의 manifest·lockfile·Docker·Compose·Actions 파일만 허용되며 stable required check를 모두 통과해야 한다. 새 seed의 `@types/node` 자동 갱신은 최저 지원 Node major 안으로 제한하고, 기존 소비 seed는 지원 Node matrix 안에서만 보존한다.
 
 ## 업데이트와 릴리스
 
 ```text
-node scripts/foundation.mjs update --version 2.0.1
+node scripts/foundation.mjs update --version 2.0.2
 node scripts/foundation.mjs verify --base origin/main
 ```
 
 업데이트는 정식 Release 자산, 경로, 크기, 버전과 SHA-256을 검증한다. managed 파일이 수정됐으면 다운로드 전에 전체를 중단하고 `PROJECT.md`, `.foundation/project.json`, Page·Capability 설정과 다른 seed 파일을 덮어쓰지 않는다. 같은 메이저의 Release tarball은 이전 updater가 읽을 수 있는 Git tree archive로 만들고 실제 immutable Release에서 update를 시험한다. Dependency 검증은 애플리케이션용 Composer 설정에 맞춰 `composer validate --strict --no-check-publish`와 `composer audit --locked`를 각각 실행한다.
+
+v2.0.0에서 v2.0.1로 이미 업데이트해 `@types/node` 24 seed와 strict validation이 충돌한 경우에는 프로젝트 소유 `package.json`과 lockfile의 `@types/node`를 22 계열 정확 버전으로 명시적으로 갱신한 뒤 v2.0.2로 업데이트한다. v2.0.0 소비 프로젝트는 seed 변경 없이 v2.0.2로 직접 업데이트할 수 있다.
 
 메이저 버전 변경은 런타임·Docker·의존성 같은 프로젝트 소유 seed 계약이 달라질 수 있으므로 자동 update하지 않는다. v1에서 v2로 이동할 때는 PHP를 8.2.33으로 명시적으로 전환하고 Composer lock·Docker image를 다시 검증한 뒤 새 Foundation을 도입한다. 승인된 migration 없이 실행한 update는 파일을 바꾸기 전에 중단한다.
 

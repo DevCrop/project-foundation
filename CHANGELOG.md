@@ -14,6 +14,17 @@
 
 ### Breaking
 
+## 2.0.2 - 2026-08-23
+
+### Fixed
+
+- v2.0.0 소비 프로젝트가 소유한 Node 24 타입 seed를 v2.0.1 managed 기준과 함께 사용할 때 strict validation이 실패하던 동일 메이저 호환 문제 수정
+- update staging에서 실행 중인 이전 validator가 아니라 다운로드한 새 Foundation validator를 별도 프로세스로 실행하도록 보강
+
+### Security
+
+- 다운로드한 managed 파일과 기존 seed를 합친 최종 상태가 새 validator를 통과하기 전에는 실제 프로젝트 파일을 교체하지 않도록 실패 원자성 강화
+
 ## 2.0.1 - 2026-08-23
 
 ### Fixed

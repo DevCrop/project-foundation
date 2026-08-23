@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "foundationVersion": "2.0.1",
+  "foundationVersion": "2.0.2",
   "mode": "upstream",
   "activeProfiles": [
     "core",
@@ -34,10 +34,10 @@
     ".gitattributes": "394a96f6b27ce26696fccc03628b12f000f1c58d94bd40cfde57799fef2064ec",
     "AGENTS.md": "26743f18c50f95ced56a2c964dd87feeaf5b467237bf29dc8817575e6799be94",
     "CLAUDE.md": "967e8376a60740a633169b42bca9970dbc6dac182062f3051e6430380a828f70",
-    "FOUNDATION.md": "6c177c108b3c3e738aade247bd2a91610e314ab187d1d4d41184013c0b58aedf",
+    "FOUNDATION.md": "5e3229d1e7a3e86d8d050697d0c5f679eca613c34427d8b7b300fe7b63e6737f",
     "SECURITY.md": "0dcbe0c899627cc441f936edeb19763988c0dc48a1ec195a9f6dda4ad0977c1a",
     "SOURCES.json": "05cac85bb03ee944a44e4d063045db156165b636a7d395943563a7c55fc72c09",
-    "scripts/foundation.mjs": "b1c854d249ab649f58b326d9e659e4ced1d8fdf5845412126eaddb4db19d7e06",
+    "scripts/foundation.mjs": "55a79ed8939bde4cc8b3c7b5293a77ccf595dbb9911f787820750fc69e4d1659",
     ".github/ISSUE_TEMPLATE/change.yml": "1764532414e65ed83e7114132d691d7e7f208e5e2d98f59dfaa4fc330eb74c00",
     ".github/PULL_REQUEST_TEMPLATE.md": "349ece6fe1344ec05e185f45909c5d3f4199437ad41cc1742cc3ad9ad8ed7100",
     ".github/dependabot.yml": "6a4926f686f133f0c54e41e3696aaac8d95037cabd2cf1fabf7f5418794156e4",

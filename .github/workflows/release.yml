@@ -50,6 +50,29 @@ jobs:
           git archive --format=tar.gz --prefix="project-foundation-v${VERSION}/" --output=".release/project-foundation-v${VERSION}.tar.gz" HEAD^{tree}
           cd .release
           sha256sum "project-foundation-v${VERSION}.tar.gz" > "project-foundation-v${VERSION}.tar.gz.sha256"
+      - name: Validate previous immutable updater
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          CURRENT_MAJOR="${VERSION%%.*}"
+          if ! PREVIOUS_TAG="$(gh release view --json tagName --jq .tagName 2>/dev/null)"; then
+            echo "No previous Release; compatibility smoke test is not applicable."
+            exit 0
+          fi
+          PREVIOUS_VERSION="${PREVIOUS_TAG#v}"
+          PREVIOUS_MAJOR="${PREVIOUS_VERSION%%.*}"
+          if [ "$CURRENT_MAJOR" != "$PREVIOUS_MAJOR" ]; then
+            echo "Previous Release is a different major; automatic update is intentionally not applicable."
+            exit 0
+          fi
+          gh release verify "$PREVIOUS_TAG"
+          mkdir -p .release/previous
+          gh release download "$PREVIOUS_TAG" --pattern "project-foundation-${PREVIOUS_TAG}.tar.gz" --dir .release/previous
+          FOUNDATION_PREVIOUS_RELEASE_ARCHIVE=".release/previous/project-foundation-${PREVIOUS_TAG}.tar.gz" \
+          FOUNDATION_CURRENT_RELEASE_ARCHIVE=".release/project-foundation-v${VERSION}.tar.gz" \
+          FOUNDATION_CURRENT_RELEASE_VERSION="$VERSION" \
+          node --test --test-name-pattern "immutable previous Release updater" scripts/foundation.test.mjs
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
