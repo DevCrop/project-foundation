@@ -404,8 +404,8 @@ test.after(async () => {
 test("upstream passes strict validation", async () => {
   const result = await validateProject(ROOT, { strict: true, now: FIXED_NOW });
   assert.deepEqual(result.errors, []);
-  assert.equal(result.ruleCount, 60);
-  assert.equal(result.sourceCount, 55);
+  assert.equal(result.ruleCount, 61);
+  assert.equal(result.sourceCount, 56);
 });
 
 test("trusted Dependabot PRs replace narrative evidence with constrained machine evidence", () => {
@@ -519,6 +519,13 @@ test("release validation requires draft, upload, and publish ordering", async ()
   await writeFile(compatibilityPath, compatibilityWorkflow.replace("HEAD^{tree}", "HEAD"), "utf8");
   const compatibilityResult = await validateProject(compatibilityRoot, { strict: true, now: FIXED_NOW });
   assert.ok(compatibilityResult.errors.some((error) => error.includes("tree object to preserve updater compatibility")));
+
+  const installRoot = await copyFoundation();
+  const installPath = path.join(installRoot, ".github", "workflows", "release.yml");
+  const installWorkflow = await readFile(installPath, "utf8");
+  await writeFile(installPath, installWorkflow.replace("- name: Validate current Release consumer install", "- name: Validate current Release consumer setup"), "utf8");
+  const installResult = await validateProject(installRoot, { strict: true, now: FIXED_NOW });
+  assert.ok(installResult.errors.some((error) => error.includes("fresh consumer dependency installation")));
 });
 
 test("full PHP initialization, page generation, and asset build are deterministic", async () => {
@@ -543,6 +550,37 @@ test("full PHP initialization, page generation, and asset build are deterministi
     assert.equal(runCli(root, ["validate", "--strict"]).status, 0);
   }
   assert.deepEqual(await snapshotTree(first), await snapshotTree(second));
+});
+
+test("run install orchestrates runtime and asset lock installs and surfaces asset failures", async () => {
+  const root = await copyFoundation();
+  await initializeConsumer(root);
+  const configurationPath = path.join(root, ".foundation", "project.json");
+  const configuration = JSON.parse(await readFile(configurationPath, "utf8"));
+  configuration.commands.install = {
+    command: "node",
+    args: ["-e", "require('node:fs').appendFileSync('install-order.txt', 'runtime\\n')"],
+  };
+  configuration.commands.assetsInstall = {
+    command: "node",
+    args: ["-e", "require('node:fs').appendFileSync('install-order.txt', 'assets\\n')"],
+  };
+  await writeFile(configurationPath, `${JSON.stringify(configuration, null, 2)}\n`, "utf8");
+
+  const installed = runCli(root, ["run", "install"]);
+  assert.equal(installed.status, 0, installed.stderr);
+  assert.equal(await readFile(path.join(root, "install-order.txt"), "utf8"), "runtime\nassets\n");
+
+  configuration.commands.assetsInstall = { command: "node", args: ["-e", "process.exit(23)"] };
+  await writeFile(configurationPath, `${JSON.stringify(configuration, null, 2)}\n`, "utf8");
+  const failed = runCli(root, ["run", "install"]);
+  assert.notEqual(failed.status, 0);
+  assert.match(failed.stderr, /Project command failed: install/);
+
+  delete configuration.commands.assetsInstall;
+  await writeFile(configurationPath, `${JSON.stringify(configuration, null, 2)}\n`, "utf8");
+  const validation = await validateProject(root, { strict: true, now: FIXED_NOW });
+  assert.ok(validation.errors.some((error) => error.includes("enabled assets require commands.assetsInstall")));
 });
 
 test("adopt plan and apply preserve an existing README", async () => {

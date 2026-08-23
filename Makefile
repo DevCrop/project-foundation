@@ -1,8 +1,9 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor validate test build image config up watch down logs ps release-check
+.PHONY: help install doctor validate test build image config up watch down logs ps release-check
 
 help:
+	@echo "install        Install runtime and asset dependencies from lockfiles"
 	@echo "doctor         Check required local tools"
 	@echo "validate       Run strict Foundation validation"
 	@echo "test           Run automated tests"
@@ -15,6 +16,9 @@ help:
 	@echo "logs           Follow service logs"
 	@echo "ps             Show service status"
 	@echo "release-check  Run release validation"
+
+install:
+	node scripts/foundation.mjs run install
 
 doctor:
 	node scripts/foundation.mjs doctor

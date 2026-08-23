@@ -67,12 +67,15 @@ Codex는 구현 전에 Intake gate를 먼저 보고한다. 보고에는 `Observe
 
 ```text
 node scripts/foundation.mjs init --profile web,assets,typescript,scss,docker,github --project-name my-project --owner github-login
+node scripts/foundation.mjs run install
 node scripts/foundation.mjs doctor
 node scripts/foundation.mjs validate --strict
 node scripts/foundation.mjs verify --base origin/main
 ```
 
 기본 결과는 PHP PageController, 순수 PHP View, SCSS 공통 entry, TypeScript 공통 entry, Vite asset manifest, Nginx·PHP-FPM Compose와 GitHub stable checks다. DB·결제·Three.js 같은 기능 파일은 생성하지 않는다.
+
+`run install`은 PHP runtime `install`과, asset 프로필이 활성화된 경우 `npm ci` 기반 `assetsInstall`을 순서대로 실행한다. 둘 중 하나라도 실패하면 후속 build·verify를 성공으로 취급하지 않는다.
 
 ## 기존 프로젝트 도입
 
@@ -196,6 +199,7 @@ Compose 기본 서비스는 `web`, `php`다. Vite 개발 서버가 필요하면 
 
 ```text
 make help
+make install
 make doctor
 make validate
 make test
@@ -230,13 +234,13 @@ PR에는 적용 PF 규칙, 새 파일 책임, 의존성 검토, 실제 검증 �
 ## 업데이트와 릴리스
 
 ```text
-node scripts/foundation.mjs update --version 2.0.2
+node scripts/foundation.mjs update --version 2.0.3
 node scripts/foundation.mjs verify --base origin/main
 ```
 
 업데이트는 정식 Release 자산, 경로, 크기, 버전과 SHA-256을 검증한다. managed 파일이 수정됐으면 다운로드 전에 전체를 중단하고 `PROJECT.md`, `.foundation/project.json`, Page·Capability 설정과 다른 seed 파일을 덮어쓰지 않는다. 같은 메이저의 Release tarball은 이전 updater가 읽을 수 있는 Git tree archive로 만들고 실제 immutable Release에서 update를 시험한다. Dependency 검증은 애플리케이션용 Composer 설정에 맞춰 `composer validate --strict --no-check-publish`와 `composer audit --locked`를 각각 실행한다.
 
-v2.0.0에서 v2.0.1로 이미 업데이트해 `@types/node` 24 seed와 strict validation이 충돌한 경우에는 프로젝트 소유 `package.json`과 lockfile의 `@types/node`를 22 계열 정확 버전으로 명시적으로 갱신한 뒤 v2.0.2로 업데이트한다. v2.0.0 소비 프로젝트는 seed 변경 없이 v2.0.2로 직접 업데이트할 수 있다.
+v2.0.0에서 v2.0.1로 이미 업데이트해 `@types/node` 24 seed와 strict validation이 충돌한 경우에는 프로젝트 소유 `package.json`과 lockfile의 `@types/node`를 22 계열 정확 버전으로 명시적으로 갱신한 뒤 v2.0.3으로 업데이트한다. v2.0.0 소비 프로젝트는 seed 변경 없이 v2.0.3으로 직접 업데이트할 수 있다.
 
 메이저 버전 변경은 런타임·Docker·의존성 같은 프로젝트 소유 seed 계약이 달라질 수 있으므로 자동 update하지 않는다. v1에서 v2로 이동할 때는 PHP를 8.2.33으로 명시적으로 전환하고 Composer lock·Docker image를 다시 검증한 뒤 새 Foundation을 도입한다. 승인된 migration 없이 실행한 update는 파일을 바꾸기 전에 중단한다.
 
