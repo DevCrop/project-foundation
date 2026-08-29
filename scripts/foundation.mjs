@@ -16,11 +16,11 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { constants as fsConstants } from "node:fs";
+import { constants as fsConstants, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -483,9 +483,138 @@ function validateDockerfile(dockerfile, configuration, toolchain, errors) {
   }
 }
 
+function validateServiceWorkflowDocument(document, errors = []) {
+  const prefix = "service-workflow.json";
+  const requireArray = (key) => {
+    if (!Array.isArray(document?.[key])) {
+      errors.push(`${prefix}: ${key} must be an array`);
+      return [];
+    }
+    return document[key];
+  };
+  const uniqueIds = (items, label, key = "id") => {
+    const ids = new Set();
+    for (const item of items) {
+      const id = item?.[key];
+      if (typeof id !== "string" || !id || ids.has(id)) errors.push(`${prefix}: duplicate or missing ${label} ${id ?? "<missing>"}`);
+      else ids.add(id);
+    }
+    return ids;
+  };
+
+  if (document?.schemaVersion !== 1) errors.push(`${prefix}: unsupported schemaVersion`);
+  if (!/^\d+\.\d+\.\d+$/.test(document?.workflowVersion ?? "")) errors.push(`${prefix}: workflowVersion must use Semantic Versioning`);
+  if (!["proposed", "active", "superseded"].includes(document?.status)) errors.push(`${prefix}: invalid status`);
+
+  const modules = requireArray("modules");
+  const moduleRelations = requireArray("moduleRelations");
+  const roles = requireArray("roles");
+  const objects = requireArray("objects");
+  const relations = requireArray("objectRelations");
+  const stages = requireArray("stages");
+  const transitions = requireArray("transitions");
+  const ports = requireArray("ports");
+  const gates = requireArray("securityGates");
+  const tables = Array.isArray(document?.database?.tables) ? document.database.tables : [];
+  if (!Array.isArray(document?.database?.tables)) errors.push(`${prefix}: database.tables must be an array`);
+
+  const moduleIds = uniqueIds(modules, "module");
+  const expectedModules = ["architecture-governance", "delivery-workflow", "release-versioning"];
+  if (moduleIds.size !== expectedModules.length || expectedModules.some((id) => !moduleIds.has(id))) {
+    errors.push(`${prefix}: exactly three canonical modules are required (${expectedModules.join(", ")})`);
+  }
+  for (const module of modules) {
+    if (!module.responsibility || !module.owns?.length || !module.commands?.length || !module.invariants?.length) {
+      errors.push(`${prefix}: module ${module.id ?? "<missing>"} requires responsibility, owns, commands, and invariants`);
+    }
+  }
+  for (const relation of moduleRelations) {
+    if (!moduleIds.has(relation.from)) errors.push(`${prefix}: module relation references unknown source ${relation.from}`);
+    if (!moduleIds.has(relation.to)) errors.push(`${prefix}: module relation references unknown target ${relation.to}`);
+    if (!relation.type || !relation.on) errors.push(`${prefix}: module relation ${relation.from ?? "?"} -> ${relation.to ?? "?"} requires type and event`);
+  }
+
+  const solidKeys = ["singleResponsibility", "openClosed", "liskovSubstitution", "interfaceSegregation", "dependencyInversion"];
+  if (solidKeys.some((key) => !document?.solid?.[key]?.rule || !document.solid[key].evidence?.length)) {
+    errors.push(`${prefix}: all five SOLID principles require a rule and evidence`);
+  }
+
+  const roleIds = uniqueIds(roles, "role");
+  const objectIds = uniqueIds(objects, "object");
+  const stageIds = uniqueIds(stages, "stage");
+  uniqueIds(ports, "port");
+  const gateIds = uniqueIds(gates, "security gate");
+  const tableNames = uniqueIds(tables, "table", "name");
+
+  for (const object of objects) {
+    if (!object.responsibility || !object.behaviors?.length) errors.push(`${prefix}: object ${object.id ?? "<missing>"} requires responsibility and behaviors`);
+  }
+  for (const relation of relations) {
+    if (!objectIds.has(relation.from)) errors.push(`${prefix}: object relation references unknown source ${relation.from}`);
+    if (!objectIds.has(relation.to)) errors.push(`${prefix}: object relation references unknown target ${relation.to}`);
+    if (!relation.type) errors.push(`${prefix}: object relation ${relation.from ?? "?"} -> ${relation.to ?? "?"} is missing type`);
+  }
+
+  const sequences = new Set();
+  for (const stage of stages) {
+    if (!Number.isInteger(stage.sequence) || stage.sequence < 1 || sequences.has(stage.sequence)) errors.push(`${prefix}: stage ${stage.id ?? "<missing>"} has duplicate or invalid sequence`);
+    sequences.add(stage.sequence);
+    if (!stage.responsibility || !stage.inputs?.length || !stage.actions?.length || !stage.outputs?.length || !stage.gate) {
+      errors.push(`${prefix}: stage ${stage.id ?? "<missing>"} requires responsibility, input, action, output, and gate`);
+    }
+    for (const role of stage.owners ?? []) if (!roleIds.has(role)) errors.push(`${prefix}: stage ${stage.id} references unknown owner ${role}`);
+    for (const table of stage.databaseWrites ?? []) if (!tableNames.has(table)) errors.push(`${prefix}: stage ${stage.id} writes unknown table ${table}`);
+  }
+  if (stages.length && [...sequences].some((sequence) => sequence > stages.length)) errors.push(`${prefix}: stage sequences must be contiguous`);
+
+  for (const transition of transitions) {
+    if (!stageIds.has(transition.from)) errors.push(`${prefix}: transition references unknown source ${transition.from}`);
+    if (!stageIds.has(transition.to)) errors.push(`${prefix}: transition references unknown target ${transition.to}`);
+    if (!transition.on || !["forward", "rework", "pause", "change-control", "rollback"].includes(transition.kind)) {
+      errors.push(`${prefix}: transition ${transition.from ?? "?"} -> ${transition.to ?? "?"} requires event and valid kind`);
+    }
+  }
+
+  for (const table of tables) {
+    if (!table.domain || !table.purpose || !table.columns || typeof table.columns !== "object") errors.push(`${prefix}: table ${table.name ?? "<missing>"} requires domain, purpose, and columns`);
+    const primaryKeys = Object.values(table.columns ?? {}).filter((definition) => /\bpk\b/.test(definition));
+    if (!primaryKeys.length) errors.push(`${prefix}: table ${table.name ?? "<missing>"} requires a primary key`);
+    for (const [column, definition] of Object.entries(table.columns ?? {})) {
+      const foreignKey = definition.match(/\bfk:([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)\b/);
+      if (foreignKey && !tableNames.has(foreignKey[1])) errors.push(`${prefix}: ${table.name}.${column} references unknown table ${foreignKey[1]}`);
+    }
+  }
+  if (document?.database?.targetNormalForm !== "3NF") errors.push(`${prefix}: database.targetNormalForm must be 3NF`);
+  if (!document?.database?.normalizationRules?.length) errors.push(`${prefix}: database normalization rules are required`);
+
+  for (const gate of gates) {
+    if (!gate.checks?.length || !gate.blockingSeverity) errors.push(`${prefix}: security gate ${gate.id ?? "<missing>"} requires checks and blockingSeverity`);
+    for (const stage of gate.boundStages ?? []) if (!stageIds.has(stage)) errors.push(`${prefix}: security gate ${gate.id} references unknown stage ${stage}`);
+  }
+  if (!gates.some((gate) => gate.id === "pull-request-security-review" && gate.integration?.officialSourceId === "codex-security-ci")) {
+    errors.push(`${prefix}: Codex Security PR review gate and official source are required`);
+  }
+
+  const release = document?.releaseVersioning;
+  const branchNames = new Set(release?.branches?.map((branch) => branch.name) ?? []);
+  if (!release || release.status !== "planned" || !branchNames.has("main") || !branchNames.has("prod")) {
+    errors.push(`${prefix}: planned release versioning with main and prod branches is required`);
+  }
+  if (!release?.promotionFlow?.length || !release?.requiredEvidence?.length || !release?.activationGates?.length) {
+    errors.push(`${prefix}: release promotion, evidence, and activation gates are required`);
+  }
+  if (release?.bootstrapAutomation?.mode !== "idempotent" || !release.bootstrapAutomation.steps?.length) {
+    errors.push(`${prefix}: release branch bootstrap must be idempotent and documented`);
+  }
+  if (!document?.canvas?.views?.length) errors.push(`${prefix}: canvas views are required`);
+
+  return errors;
+}
+
 async function validateProject(root, { strict = false, now = new Date() } = {}) {
   const errors = [];
   const warnings = [];
+  let serviceWorkflowDocument;
   const required = [
     "README.md",
     "FOUNDATION.md",
@@ -628,6 +757,20 @@ async function validateProject(root, { strict = false, now = new Date() } = {}) 
   }
 
   await validateInternalLinks(root, files, errors);
+
+  const serviceWorkflowPath = resolveInside(root, ".foundation/service-workflow.json");
+  if (await exists(serviceWorkflowPath)) {
+    try {
+      serviceWorkflowDocument = await readJson(serviceWorkflowPath);
+      validateServiceWorkflowDocument(serviceWorkflowDocument, errors);
+      for (const gate of serviceWorkflowDocument.securityGates ?? []) {
+        const officialSourceId = gate.integration?.officialSourceId;
+        if (officialSourceId && !sourceIds.has(officialSourceId)) errors.push(`service-workflow.json: security gate ${gate.id} references unknown official source ${officialSourceId}`);
+      }
+    } catch (error) {
+      errors.push(error.message, ...(error.details ?? []));
+    }
+  }
 
   let projectConfiguration;
   try {
@@ -2111,7 +2254,7 @@ async function agentContext(root) {
   const manifest = await readJson(resolveInside(root, ".foundation/manifest.json"));
   const configuration = await readJson(resolveInside(root, ".foundation/project.json"));
   const commandNames = Object.keys(configuration.commands ?? {});
-  return [
+  const context = [
     "Read FOUNDATION.md, PROJECT.md, and the nearest AGENTS.md before editing.",
     `Runtime: ${configuration.project.runtime}. Active profiles: ${manifest.activeProfiles.join(", ")}.`,
     `Project Intake: ${configuration.intake.state}. Unverified: ${configuration.intake.unverified.length ? configuration.intake.unverified.join(", ") : "none"}.`,
@@ -2119,7 +2262,16 @@ async function agentContext(root) {
     "Before finishing run: node scripts/foundation.mjs verify --base origin/main",
     "Never convert Inferred or Unverified information into Observed facts. Use evidence add/audit for durable completion claims.",
     "Use site-starter for project intake, architecture-selection for structural changes, and change-workflow for implementation changes.",
-  ].join("\n");
+  ];
+  const serviceWorkflowPath = resolveInside(root, ".foundation/service-workflow.json");
+  if (await exists(serviceWorkflowPath)) {
+    const workflow = await readJson(serviceWorkflowPath);
+    context.splice(1, 0,
+      `Service workflow: ${workflow.workflowVersion} (${workflow.status}), ${workflow.modules.length} modules, ${workflow.stages.length} stages, ${workflow.objects.length} objects, ${workflow.database.tables.length} normalized tables.`,
+      "For service, customer, database, security, or release work, edit .foundation/service-workflow.json only; docs/service-workflow-canvas.html is a read-only projection.",
+    );
+  }
+  return context.join("\n");
 }
 
 async function agentHook(root, eventName) {
@@ -2660,7 +2812,16 @@ async function main(argv = process.argv.slice(2), root = process.cwd()) {
   throw new FoundationError(`Unknown command: ${[command, subcommand].filter(Boolean).join(" ")}`);
 }
 
-const isDirectExecution = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+function comparableRealPath(value) {
+  try {
+    return realpathSync(value);
+  } catch {
+    return path.resolve(value);
+  }
+}
+
+const isDirectExecution = process.argv[1]
+  && comparableRealPath(fileURLToPath(import.meta.url)) === comparableRealPath(process.argv[1]);
 if (isDirectExecution) {
   main().catch((error) => {
     console.error(`ERROR ${error.message}`);
@@ -2698,5 +2859,6 @@ export {
   pullRequestPolicyErrors,
   updateProject,
   validateProject,
+  validateServiceWorkflowDocument,
   verifyProject,
 };

@@ -31,6 +31,7 @@ import {
   refreshManifest,
   resolveInside,
   validateProject,
+  validateServiceWorkflowDocument,
 } from "./foundation.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -405,7 +406,21 @@ test("upstream passes strict validation", async () => {
   const result = await validateProject(ROOT, { strict: true, now: FIXED_NOW });
   assert.deepEqual(result.errors, []);
   assert.equal(result.ruleCount, 61);
-  assert.equal(result.sourceCount, 56);
+  assert.equal(result.sourceCount, 57);
+});
+
+test("service workflow JSON keeps module, stage, database, security, and release references valid", async () => {
+  const document = JSON.parse(await readFile(path.join(ROOT, ".foundation", "service-workflow.json"), "utf8"));
+  assert.deepEqual(validateServiceWorkflowDocument(document), []);
+
+  const invalid = structuredClone(document);
+  invalid.stages[0].databaseWrites.push("missing_table");
+  invalid.transitions[0].to = "missing_stage";
+  invalid.securityGates.find((gate) => gate.id === "pull-request-security-review").integration.officialSourceId = "unknown-source";
+  const errors = validateServiceWorkflowDocument(invalid);
+  assert.ok(errors.some((error) => error.includes("missing_table")));
+  assert.ok(errors.some((error) => error.includes("missing_stage")));
+  assert.ok(errors.some((error) => error.includes("Codex Security PR review gate")));
 });
 
 test("trusted Dependabot PRs replace narrative evidence with constrained machine evidence", () => {
@@ -557,6 +572,7 @@ test("run install orchestrates runtime and asset lock installs and surfaces asse
   await initializeConsumer(root);
   const configurationPath = path.join(root, ".foundation", "project.json");
   const configuration = JSON.parse(await readFile(configurationPath, "utf8"));
+  const environment = { PATH: [path.dirname(process.execPath), process.env.PATH].filter(Boolean).join(path.delimiter) };
   configuration.commands.install = {
     command: "node",
     args: ["-e", "require('node:fs').appendFileSync('install-order.txt', 'runtime\\n')"],
@@ -567,13 +583,13 @@ test("run install orchestrates runtime and asset lock installs and surfaces asse
   };
   await writeFile(configurationPath, `${JSON.stringify(configuration, null, 2)}\n`, "utf8");
 
-  const installed = runCli(root, ["run", "install"]);
+  const installed = runCli(root, ["run", "install"], environment);
   assert.equal(installed.status, 0, installed.stderr);
   assert.equal(await readFile(path.join(root, "install-order.txt"), "utf8"), "runtime\nassets\n");
 
   configuration.commands.assetsInstall = { command: "node", args: ["-e", "process.exit(23)"] };
   await writeFile(configurationPath, `${JSON.stringify(configuration, null, 2)}\n`, "utf8");
-  const failed = runCli(root, ["run", "install"]);
+  const failed = runCli(root, ["run", "install"], environment);
   assert.notEqual(failed.status, 0);
   assert.match(failed.stderr, /Project command failed: install/);
 
