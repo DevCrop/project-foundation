@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-23",
+  "verifiedAt": "2026-08-30",
   "allowedDomains": [
     "code.claude.com",
     "cursor.com",
@@ -28,6 +28,14 @@
     "www.typescriptlang.org"
   ],
   "sources": [
+    {
+      "id": "codex-security-ci",
+      "provider": "OpenAI",
+      "url": "https://learn.chatgpt.com/docs/security/cli/ci",
+      "verifiedAt": "2026-08-30",
+      "reviewIntervalDays": 31,
+      "covers": ["Codex Security CLI", "pull request diff scan", "JSON and SARIF export", "severity policy", "CI secret scope"]
+    },
     {
       "id": "codex-agents-md",
       "provider": "OpenAI",

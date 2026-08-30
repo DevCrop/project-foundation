@@ -1,0 +1,1348 @@
+{
+  "schemaVersion": 1,
+  "workflowVersion": "2.0.0",
+  "status": "active",
+  "updatedAt": "2026-08-30",
+  "sourceOfTruth": {
+    "path": ".foundation/service-workflow.json",
+    "editingRule": "Edit this JSON only. The Canvas is a read-only projection and must not own workflow content.",
+    "consumers": [
+      "LLM agents",
+      "Foundry Console React Flow Canvas",
+      "Foundation service workflow validator",
+      "future orchestration runtime"
+    ]
+  },
+  "facts": {
+    "observed": [
+      "Customer inquiries commonly arrive through KakaoTalk Business Channel.",
+      "Customer materials are collected before schedule guidance and design work.",
+      "Design proposals are shared through Figma and revised from customer feedback.",
+      "The workflow source must be JSON and the Canvas must render from that source."
+    ],
+    "inferred": [
+      "A project-specific preview environment reduces approval ambiguity before production deployment.",
+      "Append-only project history and normalized case features can reduce risk for similar future requests.",
+      "Provider-specific services should be isolated behind ports and adapters."
+    ],
+    "unverified": [
+      "Codex Security account access and API-key eligibility",
+      "KakaoTalk Business Channel API product and message-template approval",
+      "production database vendor and physical UUID representation",
+      "hosting provider API and domain provider API",
+      "customer feedback portal authentication method",
+      "retention periods requiring legal or contractual confirmation"
+    ]
+  },
+  "architecture": {
+    "patterns": [
+      {
+        "id": "state-machine",
+        "purpose": "Allow only explicit stage transitions and preserve approval gates."
+      },
+      {
+        "id": "strategy",
+        "purpose": "Implement each stage behind the same StageHandler contract."
+      },
+      {
+        "id": "ports-and-adapters",
+        "purpose": "Keep KakaoTalk, Figma, storage, hosting, domain, email, and security providers outside the domain model."
+      },
+      {
+        "id": "append-only-history",
+        "purpose": "Preserve messages, decisions, approvals, deployments, and project events without destructive overwrites."
+      }
+    ],
+    "invariants": [
+      "Stages never call another stage directly; WorkflowOrchestrator owns transitions.",
+      "Customer chat is communication evidence, not final approval by itself.",
+      "Every approval references an immutable artifact version or release candidate.",
+      "Scope changes become ChangeRequest records and never silently mutate the approved scope.",
+      "Preview and production are separate environments.",
+      "Provider adapters never leak provider response objects into domain objects.",
+      "Raw source materials remain immutable; normalized requirements reference their evidence.",
+      "Production deployment requires customer approval, quality evidence, security evidence, and rollback information."
+    ]
+  },
+  "modules": [
+    {
+      "id": "architecture-governance",
+      "name": "Architecture Governance",
+      "responsibility": "객체 책임, SOLID 규칙, DB 정규화, 외부 경계와 아키텍처 변경 절차를 소유한다.",
+      "owns": ["architecture", "solid", "objects", "objectRelations", "database", "ports", "securityGates"],
+      "commands": ["proposeArchitectureChange", "validateArchitecture", "approveArchitectureVersion", "supersedeArchitectureVersion"],
+      "invariants": [
+        "승인되지 않은 객체·테이블·Port는 런타임 구현 근거가 될 수 없다.",
+        "새 공급자는 기존 Port의 Adapter로 추가하고 도메인 객체를 수정하지 않는다.",
+        "새 Stage가 필요하면 기존 Stage 확장보다 독립 책임과 전환 조건을 먼저 증명한다."
+      ]
+    },
+    {
+      "id": "delivery-workflow",
+      "name": "Delivery Workflow",
+      "responsibility": "고객 유입부터 이력화까지 사람·자동화의 행동, 입력·출력, 승인과 복귀 경로를 소유한다.",
+      "owns": ["roles", "channels", "stages", "transitions", "environments"],
+      "commands": ["startProject", "dispatchStage", "requestApproval", "recordFeedback", "advance", "rework", "closeProject"],
+      "invariants": [
+        "Stage 간 직접 호출을 금지하고 Orchestrator만 상태를 변경한다.",
+        "고객 승인과 범위 변경은 별도 불변 기록으로 남긴다.",
+        "Canvas의 노드·화살표·Inspector 내용은 이 JSON에서만 읽는다."
+      ]
+    },
+    {
+      "id": "release-versioning",
+      "name": "Release & Versioning",
+      "responsibility": "보호된 main, Release Please 승인, Preview·Production 승격, 버전, 릴리스 증거와 롤백을 소유한다.",
+      "owns": ["releaseVersioning", "environments", "securityGates"],
+      "commands": ["createPreview", "evaluateRelease", "mergeReleasePullRequest", "tagRelease", "deployTaggedRelease", "rollbackByNewRelease"],
+      "invariants": [
+        "main은 유일한 통합 브랜치이며 직접 push·force push를 금지한다.",
+        "Production 승인은 별도 prod 브랜치가 아니라 Release Please PR 병합으로 표현한다.",
+        "Preview에서 검증한 동일 build digest만 Production으로 승격한다.",
+        "rollback도 기존 이력을 지우지 않고 이전 tag에서 새 patch release로 수행한다."
+      ]
+    }
+  ],
+  "moduleRelations": [
+    {
+      "from": "architecture-governance",
+      "to": "delivery-workflow",
+      "type": "governs",
+      "on": "validated architecture contract"
+    },
+    {
+      "from": "delivery-workflow",
+      "to": "release-versioning",
+      "type": "produces",
+      "on": "approved release candidate"
+    },
+    {
+      "from": "release-versioning",
+      "to": "architecture-governance",
+      "type": "feeds-back",
+      "on": "deployment evidence and risk history"
+    }
+  ],
+  "solid": {
+    "singleResponsibility": {
+      "rule": "각 객체·Stage·Adapter는 하나의 변경 이유와 하나의 lifecycle owner만 가진다.",
+      "evidence": ["responsibility field", "owned tables", "stage input/output boundary"]
+    },
+    "openClosed": {
+      "rule": "새 Stage는 StageHandler 구현으로, 새 공급자는 Port Adapter로 추가하며 Orchestrator와 도메인 객체의 기존 계약을 수정하지 않는다.",
+      "evidence": ["stage-handler object", "ports list", "explicit transitions"]
+    },
+    "liskovSubstitution": {
+      "rule": "모든 StageHandler와 Adapter는 성공·실패·재시도·보상 결과 계약을 보존하고 더 약한 사전조건이나 숨은 부작용을 추가하지 않는다.",
+      "evidence": ["common stage gate", "compensate behavior", "provider-independent object model"]
+    },
+    "interfaceSegregation": {
+      "rule": "메시지, 디자인, 저장소, DB, 호스팅, 도메인, 보안 검사를 작은 Port로 분리하고 범용 ProviderService를 만들지 않는다.",
+      "evidence": ["ports list", "adapter responsibilities"]
+    },
+    "dependencyInversion": {
+      "rule": "WorkflowOrchestrator와 도메인 정책은 공급자 SDK가 아니라 Port 계약에만 의존한다.",
+      "evidence": ["objectRelations", "ports and adapters", "security-scan-port"]
+    }
+  },
+  "extensionProtocol": {
+    "steps": [
+      "현재 JSON version과 관련 객체·Stage·테이블을 읽는다.",
+      "Observed·Inferred·Unverified 근거와 변경 이유를 제안에 기록한다.",
+      "기존 구조 유지 대안과 최소 확장안을 비교한다.",
+      "사용자 승인 후 JSON만 수정한다.",
+      "ID·전환·FK·보안 gate·release rule 참조를 검증한다.",
+      "Canvas를 다시 로드해 시각적 diff를 확인한다.",
+      "변경 영향에 따라 workflowVersion을 Semantic Versioning으로 증가시킨다.",
+      "Git commit과 release evidence로 이전 버전을 보존한다."
+    ],
+    "versionPolicy": {
+      "patch": "설명·검증·표시 수정 또는 호환 가능한 규칙 보강",
+      "minor": "호환 가능한 Stage·객체·테이블·보안 gate 추가",
+      "major": "기존 ID 제거, 전환 의미 변경, DB 호환성 파괴 또는 module contract 변경"
+    },
+    "removalPolicy": "레거시는 사용처, transition, FK, agent reference가 모두 0이고 대체 버전과 rollback 근거가 있을 때만 deprecated → removed 순서로 제거한다."
+  },
+  "roles": [
+    {
+      "id": "customer",
+      "name": "고객",
+      "responsibilities": ["자료 제공", "범위 확인", "시안 피드백", "테스트 검수", "최종 승인"]
+    },
+    {
+      "id": "account-owner",
+      "name": "개발사 담당자",
+      "responsibilities": ["상담", "견적·일정 안내", "범위 통제", "고객 커뮤니케이션", "인계"]
+    },
+    {
+      "id": "planner",
+      "name": "기획 책임",
+      "responsibilities": ["요구사항 정규화", "사이트 구조", "완료 조건", "리스크 판단"]
+    },
+    {
+      "id": "designer",
+      "name": "디자인 책임",
+      "responsibilities": ["와이어프레임", "Figma 시안", "디자인 수정", "디자인 승인본"]
+    },
+    {
+      "id": "developer",
+      "name": "개발 책임",
+      "responsibilities": ["퍼블리싱", "PHP 기능", "DB 변경", "테스트", "릴리스 후보 생성"]
+    },
+    {
+      "id": "ops",
+      "name": "운영 책임",
+      "responsibilities": ["Preview", "운영 배포", "도메인·SSL", "모니터링", "롤백"]
+    },
+    {
+      "id": "orchestrator",
+      "name": "자동화 오케스트레이터",
+      "responsibilities": ["명령 분배", "상태 전환", "승인 요청", "재시도", "이벤트 기록"]
+    },
+    {
+      "id": "security-reviewer",
+      "name": "보안 검토",
+      "responsibilities": ["PR diff 검사", "취약점 판정", "보안 게이트", "릴리스 차단"]
+    }
+  ],
+  "channels": [
+    {
+      "id": "kakao-business",
+      "name": "카카오톡 비즈니스 채널",
+      "kind": "inbound-and-notification",
+      "authority": "communication-only",
+      "automationStatus": "unverified"
+    },
+    {
+      "id": "website-inquiry",
+      "name": "웹사이트 문의 폼",
+      "kind": "inbound",
+      "authority": "lead-source",
+      "automationStatus": "planned"
+    },
+    {
+      "id": "referral",
+      "name": "소개",
+      "kind": "inbound",
+      "authority": "lead-source",
+      "automationStatus": "manual"
+    },
+    {
+      "id": "repeat-customer",
+      "name": "기존 고객 재의뢰",
+      "kind": "inbound",
+      "authority": "lead-source",
+      "automationStatus": "planned"
+    },
+    {
+      "id": "email",
+      "name": "이메일",
+      "kind": "communication-and-notification",
+      "authority": "communication-only",
+      "automationStatus": "planned"
+    },
+    {
+      "id": "project-portal",
+      "name": "프로젝트 포털",
+      "kind": "approval-and-feedback",
+      "authority": "system-of-record",
+      "automationStatus": "planned"
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "operations-dashboard",
+      "name": "운영 대시보드",
+      "moduleId": "delivery-workflow",
+      "status": "active",
+      "routes": ["/"],
+      "responsibility": "작업 대기열, 미확정·충돌, 승인, 최근 변경과 배포 상태를 요약한다."
+    },
+    {
+      "id": "customer-intake",
+      "name": "고객 자료 정립",
+      "moduleId": "delivery-workflow",
+      "status": "active",
+      "routes": ["/projects", "/projects/[projectId]/intake"],
+      "responsibility": "유입 채널, 고객 정보, 자료 버전과 정규화 결과를 근거와 함께 관리한다."
+    },
+    {
+      "id": "fact-versioning",
+      "name": "사실·가정·미확정 버전",
+      "moduleId": "architecture-governance",
+      "status": "active",
+      "routes": ["/projects/[projectId]"],
+      "responsibility": "확정값을 덮어쓰지 않고 근거, 승인자, 변경 이유와 함께 새 버전으로 저장한다."
+    },
+    {
+      "id": "business-documents",
+      "name": "견적·신청·Export",
+      "moduleId": "delivery-workflow",
+      "status": "active",
+      "routes": ["/documents"],
+      "responsibility": "구조화된 견적서·신청서 버전을 작성하고 XLSX·DOCX·PDF 투영을 생성한다."
+    },
+    {
+      "id": "admin-notifications",
+      "name": "관리자 알림",
+      "moduleId": "delivery-workflow",
+      "status": "active",
+      "routes": ["/"],
+      "responsibility": "프로젝트·자료·승인·보안 이벤트를 관리자별 읽음 상태로 표시한다."
+    },
+    {
+      "id": "workflow-visualization",
+      "name": "JSON 워크플로우 캔버스",
+      "moduleId": "architecture-governance",
+      "status": "active",
+      "routes": ["/workflow"],
+      "responsibility": "단일 원본의 모듈·공정·객체·DB·보안 관계를 읽기 전용 그래프로 표시한다."
+    },
+    {
+      "id": "audit-observability",
+      "name": "감사·Health 관측",
+      "moduleId": "architecture-governance",
+      "status": "active",
+      "routes": ["/system/audit", "/system/health", "/api/health/live", "/api/health/ready"],
+      "responsibility": "변경 주체·대상·근거·버전과 런타임 준비 상태를 분리해 관측한다."
+    },
+    {
+      "id": "release-deployment",
+      "name": "태그 기반 Vercel 릴리스",
+      "moduleId": "release-versioning",
+      "status": "planned",
+      "routes": ["/system/health"],
+      "responsibility": "Release Please, Prisma migration, 태그 SHA Vercel 배포와 사후 health 증거를 관리한다."
+    }
+  ],
+  "objects": [
+    {
+      "id": "workflow-orchestrator",
+      "name": "WorkflowOrchestrator",
+      "kind": "application-service",
+      "group": "control",
+      "responsibility": "업무를 직접 수행하지 않고 명령, 상태 전환, 승인, 재시도와 보상을 조정한다.",
+      "behaviors": ["startProject()", "dispatch()", "evaluateGate()", "requestApproval()", "advance()", "retry()", "rollback()", "recordEvent()"]
+    },
+    {
+      "id": "stage-handler",
+      "name": "StageHandler",
+      "kind": "strategy-interface",
+      "group": "control",
+      "responsibility": "모든 공정 단계가 구현하는 실행·검증·보상 계약이다.",
+      "behaviors": ["supports()", "execute()", "validate()", "compensate()"]
+    },
+    {
+      "id": "lead",
+      "name": "Lead",
+      "kind": "aggregate",
+      "group": "sales",
+      "responsibility": "유입 출처, 최초 요청, 적합성 판정과 다음 상담 행동을 소유한다.",
+      "behaviors": ["capture()", "qualify()", "reject()", "convertToProject()"]
+    },
+    {
+      "id": "customer",
+      "name": "Customer",
+      "kind": "aggregate",
+      "group": "sales",
+      "responsibility": "고객 법적 주체, 담당자, 동의와 지속 관계를 소유한다.",
+      "behaviors": ["addContact()", "grantConsent()", "revokeConsent()", "openProject()"]
+    },
+    {
+      "id": "communication-log",
+      "name": "CommunicationLog",
+      "kind": "aggregate",
+      "group": "sales",
+      "responsibility": "채널별 대화와 전달 상태를 프로젝트 증거로 보존한다.",
+      "behaviors": ["appendMessage()", "linkProject()", "recordDelivery()", "redactExpiredContent()"]
+    },
+    {
+      "id": "project",
+      "name": "Project",
+      "kind": "aggregate-root",
+      "group": "delivery",
+      "responsibility": "고객 의뢰의 범위, 현재 단계, 담당자와 핵심 참조를 소유한다.",
+      "behaviors": ["assignOwner()", "lockScope()", "transitionTo()", "attachArtifact()", "close()"]
+    },
+    {
+      "id": "source-material",
+      "name": "SourceMaterial",
+      "kind": "aggregate",
+      "group": "planning",
+      "responsibility": "고객 원문과 파일의 버전, 무결성과 접근 수준을 보존한다.",
+      "behaviors": ["registerVersion()", "verifyChecksum()", "classify()", "quarantine()"]
+    },
+    {
+      "id": "requirement-set",
+      "name": "RequirementSet",
+      "kind": "aggregate",
+      "group": "planning",
+      "responsibility": "원문 근거가 연결된 요구사항, 가정, 완료 조건과 승인 버전을 소유한다.",
+      "behaviors": ["normalize()", "linkEvidence()", "addAcceptanceCriteria()", "approveVersion()"]
+    },
+    {
+      "id": "risk-assessment",
+      "name": "RiskAssessment",
+      "kind": "domain-service",
+      "group": "planning",
+      "responsibility": "현재 요구를 과거 사례 특성과 비교해 리스크와 완화책을 생성한다.",
+      "behaviors": ["extractFeatures()", "matchCases()", "scoreRisk()", "recommendMitigation()"]
+    },
+    {
+      "id": "case-history",
+      "name": "CaseHistory",
+      "kind": "aggregate",
+      "group": "knowledge",
+      "responsibility": "완료 프로젝트의 특징, 문제, 결정, 해결책과 결과를 재사용 가능한 형태로 보존한다.",
+      "behaviors": ["captureOutcome()", "recordIncident()", "extractPattern()", "publishForReuse()"]
+    },
+    {
+      "id": "proposal",
+      "name": "Proposal",
+      "kind": "aggregate",
+      "group": "commercial",
+      "responsibility": "승인 대상 범위, 견적 항목, 일정과 유효 기간을 버전으로 소유한다.",
+      "behaviors": ["addItem()", "calculateTotal()", "revise()", "approve()", "expire()"]
+    },
+    {
+      "id": "site-plan",
+      "name": "SitePlan",
+      "kind": "aggregate",
+      "group": "planning",
+      "responsibility": "사이트맵, 콘텐츠 모델, 기능 Capability와 기술 완료 조건을 소유한다.",
+      "behaviors": ["defineSiteMap()", "defineContentModel()", "selectCapability()", "approveArchitecture()"]
+    },
+    {
+      "id": "design-artifact",
+      "name": "DesignArtifact",
+      "kind": "aggregate",
+      "group": "design",
+      "responsibility": "Figma 시안과 화면 버전, 검수 회차와 승인 상태를 소유한다.",
+      "behaviors": ["createVersion()", "requestReview()", "applyFeedback()", "approveVersion()"]
+    },
+    {
+      "id": "feedback-round",
+      "name": "FeedbackRound",
+      "kind": "aggregate",
+      "group": "design",
+      "responsibility": "특정 산출물 버전에 대한 피드백 항목과 해결 상태를 묶는다.",
+      "behaviors": ["open()", "addItem()", "classifyScopeChange()", "resolveItem()", "close()"]
+    },
+    {
+      "id": "approval-record",
+      "name": "ApprovalRecord",
+      "kind": "immutable-entity",
+      "group": "quality",
+      "responsibility": "누가 어떤 버전을 언제 어떤 증거로 승인했는지 변경 불가능하게 기록한다.",
+      "behaviors": ["issue()", "supersedeWith()", "verifyEvidence()"]
+    },
+    {
+      "id": "change-request",
+      "name": "ChangeRequest",
+      "kind": "aggregate",
+      "group": "commercial",
+      "responsibility": "승인 범위를 벗어난 요청의 비용·일정·기술 영향을 별도 승인한다.",
+      "behaviors": ["classify()", "estimateImpact()", "approve()", "reject()"]
+    },
+    {
+      "id": "build-artifact",
+      "name": "BuildArtifact",
+      "kind": "aggregate",
+      "group": "delivery",
+      "responsibility": "승인 설계에서 생성된 코드, 빌드 결과와 commit SHA를 추적한다.",
+      "behaviors": ["attachCommit()", "build()", "verifyIntegrity()", "promote()"]
+    },
+    {
+      "id": "environment",
+      "name": "Environment",
+      "kind": "aggregate",
+      "group": "operations",
+      "responsibility": "개발·Preview·Production의 URL, 접근 정책, 만료와 비밀값 참조를 소유한다.",
+      "behaviors": ["provision()", "restrictAccess()", "expire()", "destroy()"]
+    },
+    {
+      "id": "release-candidate",
+      "name": "ReleaseCandidate",
+      "kind": "aggregate",
+      "group": "quality",
+      "responsibility": "동일 commit과 산출물에 대한 테스트·보안·고객 승인 증거를 묶는다.",
+      "behaviors": ["attachTestRun()", "attachSecurityFinding()", "evaluateReadiness()", "approveRelease()"]
+    },
+    {
+      "id": "deployment",
+      "name": "Deployment",
+      "kind": "aggregate",
+      "group": "operations",
+      "responsibility": "어떤 릴리스가 어느 환경에 배포됐는지와 롤백 관계를 기록한다.",
+      "behaviors": ["deploy()", "verifyHealth()", "rollback()", "markStable()"]
+    },
+    {
+      "id": "support-case",
+      "name": "SupportCase",
+      "kind": "aggregate",
+      "group": "operations",
+      "responsibility": "운영 문의, 장애, 변경 요청과 해결 시간을 소유한다.",
+      "behaviors": ["open()", "classify()", "resolve()", "linkDeployment()", "close()"]
+    },
+    {
+      "id": "project-event",
+      "name": "ProjectEvent",
+      "kind": "immutable-event",
+      "group": "knowledge",
+      "responsibility": "중요 상태 변경을 append-only 이벤트로 기록해 전체 이력을 재구성한다.",
+      "behaviors": ["occur()", "deduplicate()", "projectTimeline()"]
+    }
+  ],
+  "objectRelations": [
+    {"from": "workflow-orchestrator", "to": "stage-handler", "type": "dispatches"},
+    {"from": "workflow-orchestrator", "to": "project", "type": "loads-and-transitions"},
+    {"from": "workflow-orchestrator", "to": "approval-record", "type": "evaluates"},
+    {"from": "workflow-orchestrator", "to": "project-event", "type": "appends"},
+    {"from": "lead", "to": "customer", "type": "converts-to"},
+    {"from": "customer", "to": "project", "type": "owns"},
+    {"from": "communication-log", "to": "project", "type": "evidence-for"},
+    {"from": "source-material", "to": "requirement-set", "type": "evidence-for"},
+    {"from": "requirement-set", "to": "site-plan", "type": "drives"},
+    {"from": "requirement-set", "to": "risk-assessment", "type": "assessed-by"},
+    {"from": "risk-assessment", "to": "case-history", "type": "queries"},
+    {"from": "proposal", "to": "project", "type": "locks-scope-for"},
+    {"from": "site-plan", "to": "design-artifact", "type": "guides"},
+    {"from": "design-artifact", "to": "feedback-round", "type": "reviewed-by"},
+    {"from": "feedback-round", "to": "change-request", "type": "may-create"},
+    {"from": "design-artifact", "to": "build-artifact", "type": "approved-input"},
+    {"from": "build-artifact", "to": "release-candidate", "type": "promoted-to"},
+    {"from": "release-candidate", "to": "deployment", "type": "deployed-as"},
+    {"from": "deployment", "to": "environment", "type": "targets"},
+    {"from": "support-case", "to": "case-history", "type": "feeds"}
+  ],
+  "stages": [
+    {
+      "id": "lead-capture",
+      "sequence": 1,
+      "phase": "sales",
+      "name": "문의 유입",
+      "owners": ["account-owner", "orchestrator"],
+      "responsibility": "카카오톡, 웹 문의, 소개, 기존 고객 재의뢰를 하나의 Lead 형식으로 등록한다.",
+      "inputs": ["external inquiry"],
+      "actions": ["유입 출처 기록", "중복 문의 확인", "최초 요청 원문 보존", "담당자 배정"],
+      "outputs": ["lead"],
+      "gate": "최소 연락 수단과 요청 원문이 존재한다.",
+      "automation": ["웹 문의 자동 적재", "카카오 메시지 webhook 적재는 API 확인 후 활성화"],
+      "databaseWrites": ["lead_sources", "leads", "conversations", "messages"],
+      "securityControls": ["input-boundary", "webhook-idempotency", "pii-encryption"]
+    },
+    {
+      "id": "lead-qualification",
+      "sequence": 2,
+      "phase": "sales",
+      "name": "의뢰 적합성 확인",
+      "owners": ["account-owner"],
+      "responsibility": "서비스 범위, 예상 규모, 일정과 위험을 빠르게 확인해 진행 여부를 결정한다.",
+      "inputs": ["lead"],
+      "actions": ["사이트 유형 분류", "제외 범위 확인", "예산·일정 기대 확인", "진행·보류·거절 결정"],
+      "outputs": ["lead"],
+      "gate": "진행 가능 여부와 다음 행동이 기록된다.",
+      "automation": ["누락 질문 추천", "서비스 범위 외 요청 경고"],
+      "databaseWrites": ["leads"],
+      "securityControls": ["least-data-collection"]
+    },
+    {
+      "id": "customer-onboarding",
+      "sequence": 3,
+      "phase": "sales",
+      "name": "고객 등록·채널 확정",
+      "owners": ["account-owner", "customer"],
+      "responsibility": "고객과 담당자를 식별하고 공식 소통·승인 채널을 확정한다.",
+      "inputs": ["lead", "customer"],
+      "actions": ["고객 중복 확인", "담당자 등록", "개인정보 동의", "프로젝트 포털 초대"],
+      "outputs": ["customer", "communication-log", "project"],
+      "gate": "고객 소유권과 승인 가능 담당자가 확인된다.",
+      "automation": ["기존 고객 검색", "프로젝트 생성", "온보딩 안내 발송"],
+      "databaseWrites": ["customers", "customer_contacts", "contact_consents", "projects", "project_members", "project_events"],
+      "securityControls": ["identity-verification", "consent-record", "role-binding"]
+    },
+    {
+      "id": "material-intake",
+      "sequence": 4,
+      "phase": "planning",
+      "name": "고객 자료 수집",
+      "owners": ["customer", "planner", "orchestrator"],
+      "responsibility": "회사 정보, 기존 사이트, 이미지, 문서와 참고 링크를 원문 그대로 수집한다.",
+      "inputs": ["project", "source-material"],
+      "actions": ["체크리스트 발송", "파일 업로드", "파일 유형 분류", "누락 자료 요청"],
+      "outputs": ["source-material"],
+      "gate": "필수 자료가 충족되거나 명시적으로 미확정 처리된다.",
+      "automation": ["파일 checksum", "중복 파일 탐지", "누락 항목 알림", "업로드 만료 알림"],
+      "databaseWrites": ["source_materials", "material_versions", "project_events"],
+      "securityControls": ["file-size-limit", "mime-allowlist", "malware-scan", "quarantine", "private-storage"]
+    },
+    {
+      "id": "requirements-normalization",
+      "sequence": 5,
+      "phase": "planning",
+      "name": "요구사항 정규화",
+      "owners": ["planner", "orchestrator"],
+      "responsibility": "자유 형식 원문을 페이지, 기능, 콘텐츠, 비기능 요구와 완료 조건으로 구조화한다.",
+      "inputs": ["source-material", "communication-log"],
+      "actions": ["사실·가정·미확정 분리", "요구사항 분해", "원문 근거 연결", "완료 조건 작성"],
+      "outputs": ["requirement-set"],
+      "gate": "모든 요구사항이 근거, 상태와 검증 가능한 완료 조건을 가진다.",
+      "automation": ["중복 요구 병합 제안", "모순 탐지", "미확정 목록 생성"],
+      "databaseWrites": ["requirement_sets", "requirements", "requirement_sources", "assumptions", "project_events"],
+      "securityControls": ["source-traceability", "prompt-injection-treatment", "sensitive-data-tagging"]
+    },
+    {
+      "id": "history-risk-match",
+      "sequence": 6,
+      "phase": "planning",
+      "name": "유사 사례·리스크 조회",
+      "owners": ["planner", "orchestrator"],
+      "responsibility": "요구 특징을 과거 프로젝트와 비교해 반복 위험과 완화책을 제안한다.",
+      "inputs": ["requirement-set", "case-history"],
+      "actions": ["비교 특징 추출", "유사 사례 검색", "리스크 점수 산정", "사람 검토"],
+      "outputs": ["risk-assessment"],
+      "gate": "위험과 완화책이 담당자에게 검토된다.",
+      "automation": ["case feature 검색", "유사도 계산", "반복 장애 경고"],
+      "databaseWrites": ["project_risks", "project_risk_matches", "project_events"],
+      "securityControls": ["cross-customer-data-minimization", "anonymized-case-features"]
+    },
+    {
+      "id": "scope-estimate-schedule",
+      "sequence": 7,
+      "phase": "commercial",
+      "name": "범위·견적·일정 확정",
+      "owners": ["account-owner", "customer", "planner"],
+      "responsibility": "제작 범위, 제외 범위, 견적 항목, 마일스톤과 수정 기준을 승인한다.",
+      "inputs": ["requirement-set", "risk-assessment", "proposal"],
+      "actions": ["범위 고정", "견적 작성", "일정 안내", "수정 회차·변경 요청 규칙 확인"],
+      "outputs": ["proposal", "approval-record"],
+      "gate": "고객이 특정 Proposal 버전을 승인한다.",
+      "automation": ["표준 견적 항목 추천", "일정 충돌 경고", "승인 요청 알림"],
+      "databaseWrites": ["proposals", "proposal_items", "milestones", "approvals", "project_events"],
+      "securityControls": ["immutable-approval-evidence"]
+    },
+    {
+      "id": "planning-architecture",
+      "sequence": 8,
+      "phase": "planning",
+      "name": "기획·IA·기술 설계",
+      "owners": ["planner", "developer"],
+      "responsibility": "사이트맵, 콘텐츠 구조, PHP 기능, DB 영향과 인수 조건을 설계한다.",
+      "inputs": ["requirement-set", "proposal"],
+      "actions": ["사이트맵", "콘텐츠 모델", "Capability 선택", "DB 변경 계획", "테스트 기준"],
+      "outputs": ["site-plan", "approval-record"],
+      "gate": "개발 책임자가 구현 가능성과 데이터 영향을 확인한다.",
+      "automation": ["기본 페이지·Capability 후보 생성", "미등록 기능 경고"],
+      "databaseWrites": ["site_plans", "site_plan_nodes", "decisions", "approvals", "project_events"],
+      "securityControls": ["threat-model-required-for-sensitive-capability", "data-classification"]
+    },
+    {
+      "id": "design-draft",
+      "sequence": 9,
+      "phase": "design",
+      "name": "디자인 시안 제작",
+      "owners": ["designer"],
+      "responsibility": "승인된 구조를 와이어프레임과 Figma 시안 버전으로 만든다.",
+      "inputs": ["site-plan", "source-material"],
+      "actions": ["와이어프레임", "디자인 토큰", "핵심 화면", "반응형 기준", "Figma 버전 등록"],
+      "outputs": ["design-artifact"],
+      "gate": "검수 가능한 디자인 버전과 화면 목록이 존재한다.",
+      "automation": ["컴포넌트 재사용 검사", "누락 화면 검사", "Figma 링크 알림"],
+      "databaseWrites": ["artifacts", "artifact_versions", "project_events"],
+      "securityControls": ["design-link-access-control"]
+    },
+    {
+      "id": "design-review",
+      "sequence": 10,
+      "phase": "design",
+      "name": "고객 디자인 검수",
+      "owners": ["customer", "account-owner", "designer"],
+      "responsibility": "Figma 의견을 특정 화면·버전에 연결하고 승인 또는 수정 요청으로 분류한다.",
+      "inputs": ["design-artifact", "feedback-round"],
+      "actions": ["검수 회차 개시", "화면별 피드백", "질문 해소", "승인 여부 결정"],
+      "outputs": ["feedback-round", "approval-record"],
+      "gate": "모든 피드백이 해결되거나 ChangeRequest로 분리된다.",
+      "automation": ["마감 알림", "Figma comment 수집은 API 확인 후 활성화", "미해결 항목 집계"],
+      "databaseWrites": ["feedback_rounds", "feedback_items", "approvals", "project_events"],
+      "securityControls": ["approver-identity", "artifact-version-binding"]
+    },
+    {
+      "id": "design-revision",
+      "sequence": 11,
+      "phase": "design",
+      "name": "디자인 수정·범위 분리",
+      "owners": ["designer", "account-owner"],
+      "responsibility": "기존 범위 수정과 신규 범위 추가를 분리해 시안 또는 ChangeRequest로 처리한다.",
+      "inputs": ["feedback-round", "change-request"],
+      "actions": ["피드백 분류", "마이너 수정", "범위 초과 식별", "새 버전 생성"],
+      "outputs": ["design-artifact", "change-request"],
+      "gate": "수정본과 추가 요청의 처리 경계가 명확하다.",
+      "automation": ["수정 회차 집계", "범위 키워드 경고", "변경 영향 초안"],
+      "databaseWrites": ["artifact_versions", "feedback_items", "change_requests", "project_events"],
+      "securityControls": ["scope-change-audit"]
+    },
+    {
+      "id": "build",
+      "sequence": 12,
+      "phase": "delivery",
+      "name": "퍼블리싱·프런트·PHP 개발",
+      "owners": ["developer", "orchestrator"],
+      "responsibility": "승인된 설계와 요구사항을 코드와 DB migration으로 구현한다.",
+      "inputs": ["design-artifact", "site-plan", "requirement-set"],
+      "actions": ["퍼블리싱", "TypeScript 상호작용", "PHP 기능", "DB migration", "테스트"],
+      "outputs": ["build-artifact", "release-candidate"],
+      "gate": "승인 버전과 commit SHA가 연결되고 로컬 검증이 통과한다.",
+      "automation": ["lint", "typecheck", "unit test", "build", "dependency audit", "PR 생성"],
+      "databaseWrites": ["build_artifacts", "release_candidates", "test_runs", "test_results", "project_events"],
+      "securityControls": ["prepared-statements", "csrf-and-session", "secret-scan", "migration-review", "pull-request-security-review"]
+    },
+    {
+      "id": "preview-deploy",
+      "sequence": 13,
+      "phase": "quality",
+      "name": "고객 테스트 서버 배포",
+      "owners": ["ops", "developer"],
+      "responsibility": "Production과 분리된 프로젝트 전용 Preview에 동일 릴리스 후보를 배포한다.",
+      "inputs": ["release-candidate", "environment"],
+      "actions": ["Preview 환경 생성", "접근 제한", "noindex", "테스트 데이터 확인", "만료 설정"],
+      "outputs": ["deployment", "environment"],
+      "gate": "Preview health check와 접근 통제가 통과한다.",
+      "automation": ["브랜치 기반 배포", "URL 알림", "만료 정리", "health check"],
+      "databaseWrites": ["environments", "deployments", "test_runs", "test_results", "project_events"],
+      "securityControls": ["preview-auth", "robots-noindex", "redacted-test-data", "environment-expiry"]
+    },
+    {
+      "id": "customer-uat",
+      "sequence": 14,
+      "phase": "quality",
+      "name": "고객 최종 검수",
+      "owners": ["customer", "account-owner", "developer"],
+      "responsibility": "Preview에서 기능·콘텐츠·반응형 결과를 검수하고 결함과 추가 요청을 분리한다.",
+      "inputs": ["deployment", "feedback-round"],
+      "actions": ["검수 시나리오", "결함 등록", "콘텐츠 확인", "최종 승인"],
+      "outputs": ["feedback-round", "approval-record", "change-request"],
+      "gate": "결함이 해소되고 특정 ReleaseCandidate가 승인된다.",
+      "automation": ["검수 체크리스트", "스크린·URL 연결", "미해결 결함 집계", "승인 요청"],
+      "databaseWrites": ["feedback_rounds", "feedback_items", "approvals", "change_requests", "project_events"],
+      "securityControls": ["customer-role-check", "release-version-binding"]
+    },
+    {
+      "id": "release-readiness",
+      "sequence": 15,
+      "phase": "quality",
+      "name": "QA·보안·배포 승인",
+      "owners": ["developer", "ops", "security-reviewer", "orchestrator"],
+      "responsibility": "품질, 보안, 고객 승인, 백업과 롤백 조건을 하나의 릴리스 게이트로 평가한다.",
+      "inputs": ["release-candidate", "approval-record"],
+      "actions": ["테스트 증거 집계", "PR 보안 결과 확인", "DB migration 검증", "백업·롤백 확인", "릴리스 승인"],
+      "outputs": ["release-candidate", "approval-record"],
+      "gate": "차단 등급 보안 finding이 없고 모든 필수 증거가 존재한다.",
+      "automation": ["required checks", "Codex Security JSON·SARIF 수집", "심각도 정책", "릴리스 체크리스트"],
+      "databaseWrites": ["test_runs", "test_results", "security_findings", "approvals", "project_events"],
+      "securityControls": ["codex-security-diff", "dependency-review", "backup-restore-check", "rollback-plan"]
+    },
+    {
+      "id": "production-deploy",
+      "sequence": 16,
+      "phase": "operations",
+      "name": "운영 배포",
+      "owners": ["ops", "orchestrator"],
+      "responsibility": "승인된 동일 릴리스 후보만 Production에 배포하고 도메인·SSL·health를 확인한다.",
+      "inputs": ["release-candidate", "environment"],
+      "actions": ["백업", "migration", "배포", "도메인·SSL", "health check", "롤백 준비"],
+      "outputs": ["deployment"],
+      "gate": "Production health와 핵심 사용자 시나리오가 통과한다.",
+      "automation": ["배포 기록", "health check", "실패 시 자동 중단", "상태 알림"],
+      "databaseWrites": ["deployments", "test_runs", "test_results", "project_events"],
+      "securityControls": ["least-privilege-deploy", "secret-injection", "migration-transaction", "post-deploy-smoke-test"]
+    },
+    {
+      "id": "handover-support",
+      "sequence": 17,
+      "phase": "operations",
+      "name": "인계·유지보수",
+      "owners": ["account-owner", "ops", "customer"],
+      "responsibility": "관리 권한, 운영 문서, 백업·복구, 지원 범위와 만료 일정을 인계한다.",
+      "inputs": ["deployment", "support-case"],
+      "actions": ["계정 인계", "운영 안내", "백업·복구 안내", "지원 요청 접수", "변경 요청 분리"],
+      "outputs": ["support-case", "approval-record"],
+      "gate": "필수 계정과 운영 책임이 고객에게 확인된다.",
+      "automation": ["인계 체크리스트", "보증 기간 알림", "지원 티켓 생성"],
+      "databaseWrites": ["support_cases", "approvals", "project_events"],
+      "securityControls": ["credential-handover", "access-revocation", "ownership-confirmation"]
+    },
+    {
+      "id": "case-history-close",
+      "sequence": 18,
+      "phase": "knowledge",
+      "name": "성과·리스크 이력화",
+      "owners": ["account-owner", "planner", "orchestrator"],
+      "responsibility": "프로젝트 특징, 문제, 결정, 해결책, 비용·일정 영향과 결과를 다음 의뢰에 재사용한다.",
+      "inputs": ["project", "project-event", "support-case"],
+      "actions": ["사례 요약", "식별정보 제거", "특징 추출", "리스크 패턴 갱신", "회고"],
+      "outputs": ["case-history"],
+      "gate": "개인정보가 제거된 재사용 특징과 근거가 검토된다.",
+      "automation": ["타임라인 요약", "반복 이슈 집계", "case feature 생성"],
+      "databaseWrites": ["case_histories", "case_features", "risk_patterns", "project_outcomes", "project_events"],
+      "securityControls": ["de-identification", "retention-policy", "cross-customer-isolation"]
+    }
+  ],
+  "transitions": [
+    {"from": "lead-capture", "to": "lead-qualification", "on": "lead.recorded", "kind": "forward"},
+    {"from": "lead-qualification", "to": "customer-onboarding", "on": "lead.qualified", "kind": "forward"},
+    {"from": "lead-qualification", "to": "lead-qualification", "on": "lead.on_hold", "kind": "pause"},
+    {"from": "customer-onboarding", "to": "material-intake", "on": "customer.onboarded", "kind": "forward"},
+    {"from": "material-intake", "to": "requirements-normalization", "on": "intake.complete", "kind": "forward"},
+    {"from": "requirements-normalization", "to": "material-intake", "on": "intake.missing", "kind": "rework"},
+    {"from": "requirements-normalization", "to": "history-risk-match", "on": "requirements.ready", "kind": "forward"},
+    {"from": "history-risk-match", "to": "scope-estimate-schedule", "on": "risk.reviewed", "kind": "forward"},
+    {"from": "scope-estimate-schedule", "to": "planning-architecture", "on": "proposal.approved", "kind": "forward"},
+    {"from": "planning-architecture", "to": "design-draft", "on": "architecture.approved", "kind": "forward"},
+    {"from": "design-draft", "to": "design-review", "on": "design.review_requested", "kind": "forward"},
+    {"from": "design-review", "to": "design-revision", "on": "design.changes_requested", "kind": "rework"},
+    {"from": "design-revision", "to": "design-review", "on": "design.revised", "kind": "rework"},
+    {"from": "design-review", "to": "build", "on": "design.approved", "kind": "forward"},
+    {"from": "design-revision", "to": "scope-estimate-schedule", "on": "scope.change_requested", "kind": "change-control"},
+    {"from": "build", "to": "preview-deploy", "on": "build.verified", "kind": "forward"},
+    {"from": "preview-deploy", "to": "customer-uat", "on": "preview.healthy", "kind": "forward"},
+    {"from": "customer-uat", "to": "build", "on": "uat.defect_found", "kind": "rework"},
+    {"from": "customer-uat", "to": "scope-estimate-schedule", "on": "uat.scope_change", "kind": "change-control"},
+    {"from": "customer-uat", "to": "release-readiness", "on": "uat.approved", "kind": "forward"},
+    {"from": "release-readiness", "to": "build", "on": "release.blocked", "kind": "rework"},
+    {"from": "release-readiness", "to": "production-deploy", "on": "release.approved", "kind": "forward"},
+    {"from": "production-deploy", "to": "production-deploy", "on": "deployment.rollback", "kind": "rollback"},
+    {"from": "production-deploy", "to": "handover-support", "on": "production.stable", "kind": "forward"},
+    {"from": "handover-support", "to": "case-history-close", "on": "handover.accepted", "kind": "forward"},
+    {"from": "handover-support", "to": "build", "on": "support.defect_confirmed", "kind": "rework"}
+  ],
+  "environments": [
+    {
+      "id": "development",
+      "name": "개발 환경",
+      "customerAccessible": false,
+      "dataPolicy": "synthetic-or-redacted",
+      "requiredControls": ["local-secret-store", "debug-output-restricted"]
+    },
+    {
+      "id": "preview",
+      "name": "고객 테스트 환경",
+      "customerAccessible": true,
+      "dataPolicy": "synthetic-or-approved-test-data",
+      "requiredControls": ["authentication", "noindex", "expiry", "separate-secret-scope", "access-log"]
+    },
+    {
+      "id": "production",
+      "name": "운영 환경",
+      "customerAccessible": true,
+      "dataPolicy": "production",
+      "requiredControls": ["least-privilege", "encrypted-secrets", "backup", "rollback", "monitoring", "audit-log"]
+    }
+  ],
+  "releaseVersioning": {
+    "status": "planned",
+    "bootstrapPolicy": {
+      "main": "저장소 기본 브랜치로 한 번 생성하고 보호한다.",
+      "releaseApproval": "Release Please가 생성한 Release PR 병합을 Production 승인으로 간주한다.",
+      "recreation": "prod 브랜치를 만들지 않고 main의 삭제·직접 push·force push를 금지한다."
+    },
+    "bootstrapAutomation": {
+      "trigger": "first-release-requested",
+      "mode": "idempotent",
+      "steps": [
+        "main이 없으면 승인된 bootstrap commit에서 생성하고 기본 브랜치·보호 규칙을 설정한다.",
+        "main이 있으면 생성하지 않고 현재 보호 상태만 검증한다.",
+        "Release Please 권한과 GitHub App 단기 토큰 발급 범위를 검증한다.",
+        "Vercel Production environment에 태그 SHA·workflow hash·migration ID 검증 정책을 설정한다."
+      ],
+      "failurePolicy": "브랜치 생성·보호·검증 중 하나라도 실패하면 배포를 시작하지 않는다."
+    },
+    "branches": [
+      {
+        "name": "feature/*|fix/*|security/*|docs/*",
+        "purpose": "하나의 논리 변경",
+        "deploysTo": "development",
+        "mergeTarget": "main",
+        "requiredChecks": ["foundation-policy", "project-quality", "dependency-gate", "codex-security-advisory"]
+      },
+      {
+        "name": "main",
+        "purpose": "통합 완료된 다음 릴리스 후보",
+        "deploysTo": "preview",
+        "mergeTarget": null,
+        "requiredChecks": ["foundation-policy", "project-quality", "container", "dependency-gate", "codex-security", "customer-uat", "release-readiness"]
+      }
+    ],
+    "promotionFlow": [
+      "작업 브랜치 PR을 main에 병합한다.",
+      "main commit으로 immutable build artifact와 digest를 만든다.",
+      "동일 digest를 Preview에 배포하고 고객 UAT를 기록한다.",
+      "품질·Codex Security·DB migration·고객 승인 gate를 평가한다.",
+      "Release Please가 package.json·CHANGELOG을 갱신하는 Release PR을 생성한다.",
+      "Release PR 병합 시 main의 해당 commit에 Semantic Version tag와 GitHub Release를 만든다.",
+      "Production migration preflight와 prisma migrate deploy 후 태그 SHA의 동일 digest를 Vercel Production에 배포한다.",
+      "live·ready·smoke test를 실행하고 deployments에 증거를 기록한다.",
+      "실패 시 자동 중단하고 이전 tag 기반 새 patch release로 rollback한다."
+    ],
+    "versionSources": {
+      "workflow": ".foundation/service-workflow.json#/workflowVersion",
+      "application": "package.json#/version and immutable Git tag",
+      "database": "ordered migration identifier stored with deployment",
+      "artifact": "commit SHA plus build digest"
+    },
+    "requiredEvidence": [
+      "base and head commit SHA",
+      "workflowVersion",
+      "build digest",
+      "test run IDs",
+      "Codex Security result and SARIF artifact",
+      "customer approval ID",
+      "migration and rollback plan",
+      "deployment ID and health result"
+    ],
+    "activationGates": [
+      "GitHub main branch protection and Release Please App scope verified",
+      "Codex Security access and secret configured",
+      "Vercel project and environment secrets configured",
+      "Prisma Postgres backup and compatible patch migration recovery verified"
+    ]
+  },
+  "ports": [
+    {"id": "message-port", "responsibility": "메시지 송수신과 전달 상태", "adapters": ["KakaoBusinessAdapter", "EmailAdapter", "SmsAdapter"]},
+    {"id": "design-port", "responsibility": "디자인 버전과 의견 참조", "adapters": ["FigmaAdapter"]},
+    {"id": "storage-port", "responsibility": "자료·산출물 저장, checksum과 버전", "adapters": ["PrivateObjectStorageAdapter"]},
+    {"id": "database-port", "responsibility": "트랜잭션과 프로젝트 데이터 영속화", "adapters": ["PdoDatabaseAdapter"]},
+    {"id": "hosting-port", "responsibility": "Preview·Production 환경 생성과 배포", "adapters": ["SharedHostingAdapter", "CloudHostingAdapter"]},
+    {"id": "domain-port", "responsibility": "도메인·DNS·SSL 상태", "adapters": ["DomainProviderAdapter"]},
+    {"id": "security-scan-port", "responsibility": "PR diff 보안 검사와 finding 수집", "adapters": ["CodexSecurityCliAdapter"]},
+    {"id": "notification-port", "responsibility": "상태·승인·장애 알림", "adapters": ["KakaoBusinessAdapter", "EmailAdapter", "SmsAdapter"]}
+  ],
+  "securityGates": [
+    {
+      "id": "input-boundary",
+      "name": "고객 입력·자료 경계",
+      "boundStages": ["lead-capture", "material-intake", "requirements-normalization"],
+      "checks": ["형식·크기·허용값", "파일 MIME·확장자", "악성 파일 격리", "원문 prompt 지침 무시", "PII 분류"],
+      "blockingSeverity": "high"
+    },
+    {
+      "id": "identity-and-approval",
+      "name": "신원·승인 경계",
+      "boundStages": ["customer-onboarding", "scope-estimate-schedule", "design-review", "customer-uat"],
+      "checks": ["고객 소유권", "승인자 role", "대상 버전", "승인 증거", "CSRF·세션"],
+      "blockingSeverity": "high"
+    },
+    {
+      "id": "pull-request-security-review",
+      "name": "Codex Security PR diff 검사",
+      "boundStages": ["build", "release-readiness"],
+      "checks": ["merge-base 기반 diff", "structured JSON 결과", "SARIF export", "finding coverage", "severity policy"],
+      "blockingSeverity": "high",
+      "integration": {
+        "product": "Codex Security CLI",
+        "package": "@openai/codex-security",
+        "ci": "GitHub Actions pull_request",
+        "officialSourceId": "codex-security-ci",
+        "officialUrl": "https://learn.chatgpt.com/docs/security/cli/ci",
+        "availability": "unverified",
+        "requiredSecret": "CODEX_SECURITY_API_KEY",
+        "permissions": ["actions:read", "contents:read", "security-events:write"],
+        "rollout": ["advisory", "measure quality and runtime", "enable severity threshold"]
+      }
+    },
+    {
+      "id": "dependency-and-supply-chain",
+      "name": "의존성·공급망 검사",
+      "boundStages": ["build", "release-readiness"],
+      "checks": ["lockfile 일치", "dependency audit", "pinned GitHub Actions", "secret scan", "license review"],
+      "blockingSeverity": "high"
+    },
+    {
+      "id": "database-change",
+      "name": "DB 변경 검사",
+      "boundStages": ["planning-architecture", "build", "production-deploy"],
+      "checks": ["migration forward·rollback", "transaction 경계", "backup·restore", "prepared statements", "PII 암호화", "index 영향"],
+      "blockingSeverity": "high"
+    },
+    {
+      "id": "preview-isolation",
+      "name": "Preview 격리",
+      "boundStages": ["preview-deploy", "customer-uat"],
+      "checks": ["인증", "noindex", "테스트 데이터", "만료", "별도 secret", "접근 로그"],
+      "blockingSeverity": "high"
+    },
+    {
+      "id": "production-release",
+      "name": "운영 릴리스 게이트",
+      "boundStages": ["release-readiness", "production-deploy"],
+      "checks": ["고객 승인", "품질 검사", "보안 finding", "백업", "롤백", "health check", "최소 권한"],
+      "blockingSeverity": "medium"
+    },
+    {
+      "id": "history-privacy",
+      "name": "이력 재사용 개인정보 경계",
+      "boundStages": ["history-risk-match", "case-history-close"],
+      "checks": ["식별정보 제거", "고객 간 격리", "목적 제한", "보존 기간", "재식별 위험 검토"],
+      "blockingSeverity": "high"
+    }
+  ],
+  "database": {
+    "model": "logical-vendor-neutral",
+    "targetNormalForm": "3NF",
+    "historyStrategy": "append-only events plus immutable artifact and approval versions",
+    "columnNotation": "type plus optional pk, fk:<table>.<column>, unique, encrypted, immutable",
+    "normalizationRules": [
+      "Atomic values only; repeated contacts, messages, requirements, feedback items, tests, and findings use child tables.",
+      "Customer, contact, project, artifact, environment, and deployment identities are not duplicated across domains.",
+      "Many-to-many relationships use explicit junction tables.",
+      "Derived totals and current status are computed or treated as rebuildable cache, not historical truth.",
+      "JSON columns are allowed only for immutable external payload evidence or schema-flexible event payloads.",
+      "Raw materials and messages are never overwritten; redaction creates an auditable tombstone or replacement reference.",
+      "Approvals are immutable and superseded by a new approval record.",
+      "External webhook writes require provider event ID or idempotency key uniqueness.",
+      "PII fields are encrypted or stored through a dedicated secret reference and excluded from case-feature reuse.",
+      "Every project-owned table includes created_at; mutable workflow tables also include updated_at and optimistic version."
+    ],
+    "domains": [
+      "sales",
+      "customer",
+      "communication",
+      "project",
+      "intake",
+      "requirements",
+      "knowledge",
+      "commercial",
+      "design",
+      "delivery",
+      "quality",
+      "operations",
+      "audit"
+    ],
+    "tables": [
+      {
+        "name": "lead_sources",
+        "domain": "sales",
+        "purpose": "정규화된 유입 출처 사전",
+        "columns": {"id": "uuid pk", "code": "varchar unique", "name": "varchar", "active": "boolean", "created_at": "timestamp immutable"}
+      },
+      {
+        "name": "leads",
+        "domain": "sales",
+        "purpose": "최초 의뢰와 적합성 상태",
+        "columns": {"id": "uuid pk", "lead_source_id": "uuid fk:lead_sources.id", "status": "enum", "summary": "text", "owner_actor_id": "uuid fk:actors.id nullable", "created_at": "timestamp immutable", "updated_at": "timestamp", "row_version": "integer"},
+        "indexes": ["lead_source_id,status", "owner_actor_id,status"]
+      },
+      {
+        "name": "actors",
+        "domain": "customer",
+        "purpose": "고객·직원·시스템의 공통 행위자 식별자",
+        "columns": {"id": "uuid pk", "actor_type": "enum", "display_name": "varchar", "status": "enum", "created_at": "timestamp immutable"}
+      },
+      {
+        "name": "customers",
+        "domain": "customer",
+        "purpose": "고객 법적·업무 주체",
+        "columns": {"id": "uuid pk", "legal_name": "varchar", "display_name": "varchar", "registration_number_ciphertext": "text encrypted nullable", "status": "enum", "created_at": "timestamp immutable", "updated_at": "timestamp", "row_version": "integer"},
+        "indexes": ["legal_name", "status"]
+      },
+      {
+        "name": "customer_contacts",
+        "domain": "customer",
+        "purpose": "고객 담당자와 승인 역할",
+        "columns": {"id": "uuid pk", "customer_id": "uuid fk:customers.id", "actor_id": "uuid fk:actors.id unique", "role": "varchar", "email_ciphertext": "text encrypted nullable", "phone_ciphertext": "text encrypted nullable", "can_approve": "boolean", "created_at": "timestamp immutable", "updated_at": "timestamp"},
+        "indexes": ["customer_id,can_approve"]
+      },
+      {
+        "name": "contact_consents",
+        "domain": "customer",
+        "purpose": "개인정보·메시지 동의 변경 이력",
+        "columns": {"id": "uuid pk", "contact_id": "uuid fk:customer_contacts.id", "consent_type": "enum", "action": "enum immutable", "evidence_ref": "varchar immutable", "occurred_at": "timestamp immutable"},
+        "indexes": ["contact_id,consent_type,occurred_at"]
+      },
+      {
+        "name": "communication_channels",
+        "domain": "communication",
+        "purpose": "카카오·웹·이메일 등 공급자 계정",
+        "columns": {"id": "uuid pk", "channel_type": "enum", "external_account_ref": "varchar unique", "status": "enum", "created_at": "timestamp immutable"}
+      },
+      {
+        "name": "conversations",
+        "domain": "communication",
+        "purpose": "고객·프로젝트별 대화 스레드",
+        "columns": {"id": "uuid pk", "customer_id": "uuid fk:customers.id nullable", "project_id": "uuid fk:projects.id nullable", "channel_id": "uuid fk:communication_channels.id", "external_thread_ref": "varchar nullable", "created_at": "timestamp immutable", "closed_at": "timestamp nullable"},
+        "indexes": ["customer_id,created_at", "project_id,created_at"]
+      },
+      {
+        "name": "messages",
+        "domain": "communication",
+        "purpose": "변경 불가능한 송수신 메시지 증거",
+        "columns": {"id": "uuid pk", "conversation_id": "uuid fk:conversations.id", "sender_actor_id": "uuid fk:actors.id nullable", "direction": "enum immutable", "body_ciphertext": "text encrypted immutable", "external_message_id": "varchar nullable", "idempotency_key": "varchar unique nullable", "sent_at": "timestamp immutable", "delivery_status": "enum"},
+        "indexes": ["conversation_id,sent_at", "external_message_id"]
+      },
+      {
+        "name": "projects",
+        "domain": "project",
+        "purpose": "고객 제작 의뢰 aggregate root",
+        "columns": {"id": "uuid pk", "customer_id": "uuid fk:customers.id", "lead_id": "uuid fk:leads.id unique", "code": "varchar unique", "title": "varchar", "status": "enum", "current_stage_id": "varchar", "owner_actor_id": "uuid fk:actors.id", "created_at": "timestamp immutable", "updated_at": "timestamp", "row_version": "integer"},
+        "indexes": ["customer_id,status", "owner_actor_id,status", "current_stage_id"]
+      },
+      {
+        "name": "project_members",
+        "domain": "project",
+        "purpose": "프로젝트와 행위자의 역할 연결",
+        "columns": {"project_id": "uuid pk fk:projects.id", "actor_id": "uuid pk fk:actors.id", "role": "varchar", "joined_at": "timestamp immutable", "left_at": "timestamp nullable"}
+      },
+      {
+        "name": "milestones",
+        "domain": "project",
+        "purpose": "승인된 일정 마일스톤",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "code": "varchar", "name": "varchar", "planned_at": "timestamp", "completed_at": "timestamp nullable", "status": "enum", "created_at": "timestamp immutable", "updated_at": "timestamp"},
+        "unique": ["project_id,code"]
+      },
+      {
+        "name": "source_materials",
+        "domain": "intake",
+        "purpose": "고객 원문 자료의 논리적 항목",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "kind": "enum", "classification": "enum", "status": "enum", "created_by": "uuid fk:actors.id", "created_at": "timestamp immutable"},
+        "indexes": ["project_id,kind,status"]
+      },
+      {
+        "name": "material_versions",
+        "domain": "intake",
+        "purpose": "자료 파일·원문의 불변 버전",
+        "columns": {"id": "uuid pk", "source_material_id": "uuid fk:source_materials.id", "version_no": "integer", "storage_key": "varchar immutable", "checksum": "varchar immutable", "mime_type": "varchar", "byte_size": "bigint", "scan_status": "enum", "created_at": "timestamp immutable"},
+        "unique": ["source_material_id,version_no", "checksum"]
+      },
+      {
+        "name": "requirement_sets",
+        "domain": "requirements",
+        "purpose": "요구사항 승인 버전",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "version_no": "integer", "status": "enum", "created_by": "uuid fk:actors.id", "created_at": "timestamp immutable", "approved_at": "timestamp nullable"},
+        "unique": ["project_id,version_no"]
+      },
+      {
+        "name": "requirements",
+        "domain": "requirements",
+        "purpose": "원자적 요구사항과 완료 조건",
+        "columns": {"id": "uuid pk", "requirement_set_id": "uuid fk:requirement_sets.id", "parent_requirement_id": "uuid fk:requirements.id nullable", "category": "enum", "statement": "text", "acceptance_criteria": "text", "priority": "enum", "verification_state": "enum", "created_at": "timestamp immutable"},
+        "indexes": ["requirement_set_id,category", "parent_requirement_id"]
+      },
+      {
+        "name": "requirement_sources",
+        "domain": "requirements",
+        "purpose": "요구사항과 원문 근거의 다대다 연결",
+        "columns": {"requirement_id": "uuid pk fk:requirements.id", "material_version_id": "uuid pk fk:material_versions.id", "source_locator": "varchar", "created_at": "timestamp immutable"}
+      },
+      {
+        "name": "assumptions",
+        "domain": "requirements",
+        "purpose": "미확정 가정과 검증 상태",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "statement": "text", "verification_state": "enum", "resolved_by_decision_id": "uuid fk:decisions.id nullable", "created_at": "timestamp immutable", "updated_at": "timestamp"},
+        "indexes": ["project_id,verification_state"]
+      },
+      {
+        "name": "decisions",
+        "domain": "audit",
+        "purpose": "중요 판단과 근거의 불변 기록",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "stage_id": "varchar", "subject": "varchar", "decision": "text immutable", "rationale": "text immutable", "decided_by": "uuid fk:actors.id", "decided_at": "timestamp immutable"},
+        "indexes": ["project_id,decided_at", "stage_id"]
+      },
+      {
+        "name": "case_histories",
+        "domain": "knowledge",
+        "purpose": "완료 프로젝트의 비식별 사례",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id unique", "summary": "text", "outcome": "text", "reuse_status": "enum", "closed_at": "timestamp immutable", "created_at": "timestamp immutable"}
+      },
+      {
+        "name": "case_features",
+        "domain": "knowledge",
+        "purpose": "유사 사례 검색용 정규화 특징",
+        "columns": {"id": "uuid pk", "case_history_id": "uuid fk:case_histories.id", "feature_key": "varchar", "feature_value": "varchar", "classification": "enum", "created_at": "timestamp immutable"},
+        "unique": ["case_history_id,feature_key,feature_value"],
+        "indexes": ["feature_key,feature_value"]
+      },
+      {
+        "name": "risk_patterns",
+        "domain": "knowledge",
+        "purpose": "반복 위험과 표준 완화책",
+        "columns": {"id": "uuid pk", "code": "varchar unique", "name": "varchar", "category": "enum", "default_mitigation": "text", "status": "enum", "created_at": "timestamp immutable", "updated_at": "timestamp"}
+      },
+      {
+        "name": "project_risks",
+        "domain": "knowledge",
+        "purpose": "프로젝트별 위험 평가",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "risk_pattern_id": "uuid fk:risk_patterns.id nullable", "category": "enum", "probability": "smallint", "impact": "smallint", "mitigation": "text", "status": "enum", "created_at": "timestamp immutable", "updated_at": "timestamp"},
+        "indexes": ["project_id,status", "risk_pattern_id"]
+      },
+      {
+        "name": "project_risk_matches",
+        "domain": "knowledge",
+        "purpose": "현재 프로젝트와 과거 사례의 검토 가능한 매칭",
+        "columns": {"project_id": "uuid pk fk:projects.id", "case_history_id": "uuid pk fk:case_histories.id", "score": "decimal", "matched_factors_json": "json immutable", "reviewed_by": "uuid fk:actors.id nullable", "reviewed_at": "timestamp nullable", "created_at": "timestamp immutable"},
+        "indexes": ["project_id,score"]
+      },
+      {
+        "name": "proposals",
+        "domain": "commercial",
+        "purpose": "견적·범위 승인 버전",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "version_no": "integer", "currency": "char", "status": "enum", "valid_until": "date", "created_at": "timestamp immutable", "approved_at": "timestamp nullable"},
+        "unique": ["project_id,version_no"]
+      },
+      {
+        "name": "proposal_items",
+        "domain": "commercial",
+        "purpose": "원자적 견적 항목",
+        "columns": {"id": "uuid pk", "proposal_id": "uuid fk:proposals.id", "item_code": "varchar", "description": "text", "quantity": "decimal", "unit_price": "decimal", "created_at": "timestamp immutable"},
+        "unique": ["proposal_id,item_code"]
+      },
+      {
+        "name": "site_plans",
+        "domain": "design",
+        "purpose": "기획·IA·기술 설계 승인 버전",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "version_no": "integer", "status": "enum", "created_by": "uuid fk:actors.id", "created_at": "timestamp immutable", "approved_at": "timestamp nullable"},
+        "unique": ["project_id,version_no"]
+      },
+      {
+        "name": "site_plan_nodes",
+        "domain": "design",
+        "purpose": "사이트맵과 콘텐츠 노드",
+        "columns": {"id": "uuid pk", "site_plan_id": "uuid fk:site_plans.id", "parent_node_id": "uuid fk:site_plan_nodes.id nullable", "node_type": "enum", "slug": "varchar", "title": "varchar", "sort_order": "integer", "created_at": "timestamp immutable"},
+        "unique": ["site_plan_id,slug"],
+        "indexes": ["site_plan_id,parent_node_id,sort_order"]
+      },
+      {
+        "name": "artifacts",
+        "domain": "design",
+        "purpose": "디자인·빌드·문서 산출물의 논리적 항목",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "kind": "enum", "name": "varchar", "status": "enum", "created_at": "timestamp immutable"},
+        "indexes": ["project_id,kind,status"]
+      },
+      {
+        "name": "artifact_versions",
+        "domain": "design",
+        "purpose": "산출물의 불변 버전과 외부 참조",
+        "columns": {"id": "uuid pk", "artifact_id": "uuid fk:artifacts.id", "version_no": "integer", "external_ref": "varchar nullable", "storage_key": "varchar nullable", "checksum": "varchar nullable", "commit_sha": "varchar nullable", "created_by": "uuid fk:actors.id", "created_at": "timestamp immutable"},
+        "unique": ["artifact_id,version_no"]
+      },
+      {
+        "name": "feedback_rounds",
+        "domain": "design",
+        "purpose": "특정 산출물 버전의 검수 회차",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "artifact_version_id": "uuid fk:artifact_versions.id", "round_no": "integer", "status": "enum", "due_at": "timestamp nullable", "created_at": "timestamp immutable", "closed_at": "timestamp nullable"},
+        "unique": ["artifact_version_id,round_no"]
+      },
+      {
+        "name": "feedback_items",
+        "domain": "design",
+        "purpose": "화면·기능별 원자적 피드백",
+        "columns": {"id": "uuid pk", "feedback_round_id": "uuid fk:feedback_rounds.id", "screen_ref": "varchar nullable", "category": "enum", "description": "text", "scope_classification": "enum", "status": "enum", "resolution": "text nullable", "created_by": "uuid fk:actors.id", "created_at": "timestamp immutable", "resolved_at": "timestamp nullable"},
+        "indexes": ["feedback_round_id,status", "scope_classification"]
+      },
+      {
+        "name": "approvals",
+        "domain": "quality",
+        "purpose": "버전 대상 불변 승인 증거",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "subject_type": "enum immutable", "subject_id": "uuid immutable", "subject_version": "varchar immutable", "approved_by": "uuid fk:actors.id", "evidence_ref": "varchar immutable", "supersedes_approval_id": "uuid fk:approvals.id nullable", "approved_at": "timestamp immutable"},
+        "indexes": ["project_id,subject_type,subject_id", "approved_by,approved_at"]
+      },
+      {
+        "name": "change_requests",
+        "domain": "commercial",
+        "purpose": "승인 범위를 벗어난 변경",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "source_feedback_item_id": "uuid fk:feedback_items.id nullable", "scope_delta": "text", "estimate_delta": "decimal nullable", "schedule_delta_days": "integer nullable", "status": "enum", "created_at": "timestamp immutable", "updated_at": "timestamp"},
+        "indexes": ["project_id,status"]
+      },
+      {
+        "name": "environments",
+        "domain": "operations",
+        "purpose": "프로젝트 실행 환경과 접근 정책",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "environment_type": "enum", "base_url": "varchar", "access_policy": "enum", "secret_scope_ref": "varchar", "expires_at": "timestamp nullable", "status": "enum", "created_at": "timestamp immutable", "updated_at": "timestamp"},
+        "unique": ["project_id,environment_type,base_url"]
+      },
+      {
+        "name": "build_artifacts",
+        "domain": "delivery",
+        "purpose": "빌드 결과와 commit 무결성",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "artifact_version_id": "uuid fk:artifact_versions.id", "commit_sha": "varchar immutable", "build_digest": "varchar immutable", "status": "enum", "created_at": "timestamp immutable"},
+        "unique": ["project_id,commit_sha,build_digest"]
+      },
+      {
+        "name": "release_candidates",
+        "domain": "quality",
+        "purpose": "배포 가능한 동일 릴리스 단위",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "build_artifact_id": "uuid fk:build_artifacts.id", "version": "varchar", "commit_sha": "varchar immutable", "status": "enum", "created_at": "timestamp immutable", "approved_at": "timestamp nullable"},
+        "unique": ["project_id,version"]
+      },
+      {
+        "name": "test_runs",
+        "domain": "quality",
+        "purpose": "릴리스 후보별 테스트 실행",
+        "columns": {"id": "uuid pk", "release_candidate_id": "uuid fk:release_candidates.id", "test_type": "enum", "status": "enum", "started_at": "timestamp immutable", "finished_at": "timestamp nullable", "evidence_ref": "varchar nullable"},
+        "indexes": ["release_candidate_id,test_type,status"]
+      },
+      {
+        "name": "test_results",
+        "domain": "quality",
+        "purpose": "테스트 실행의 원자적 검사 결과",
+        "columns": {"id": "uuid pk", "test_run_id": "uuid fk:test_runs.id", "check_code": "varchar", "severity": "enum", "status": "enum", "message": "text nullable", "evidence_ref": "varchar nullable", "created_at": "timestamp immutable"},
+        "unique": ["test_run_id,check_code"]
+      },
+      {
+        "name": "security_findings",
+        "domain": "quality",
+        "purpose": "보안 도구 finding과 해결 상태",
+        "columns": {"id": "uuid pk", "release_candidate_id": "uuid fk:release_candidates.id", "scanner": "varchar", "external_id": "varchar nullable", "fingerprint": "varchar", "severity": "enum", "status": "enum", "location_ref": "varchar", "evidence_ref": "varchar nullable", "created_at": "timestamp immutable", "resolved_at": "timestamp nullable"},
+        "unique": ["scanner,fingerprint,release_candidate_id"],
+        "indexes": ["release_candidate_id,severity,status"]
+      },
+      {
+        "name": "deployments",
+        "domain": "operations",
+        "purpose": "릴리스 후보의 환경 배포·롤백 이력",
+        "columns": {"id": "uuid pk", "release_candidate_id": "uuid fk:release_candidates.id", "environment_id": "uuid fk:environments.id", "status": "enum", "rollback_of_deployment_id": "uuid fk:deployments.id nullable", "deployed_by": "uuid fk:actors.id", "deployed_at": "timestamp immutable", "finished_at": "timestamp nullable"},
+        "indexes": ["environment_id,deployed_at", "release_candidate_id,status"]
+      },
+      {
+        "name": "support_cases",
+        "domain": "operations",
+        "purpose": "운영 장애·문의·변경 요청",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "deployment_id": "uuid fk:deployments.id nullable", "category": "enum", "severity": "enum", "status": "enum", "summary": "text", "opened_at": "timestamp immutable", "resolved_at": "timestamp nullable", "closed_at": "timestamp nullable"},
+        "indexes": ["project_id,status,severity"]
+      },
+      {
+        "name": "project_outcomes",
+        "domain": "knowledge",
+        "purpose": "프로젝트 결과 측정값",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "metric_code": "varchar", "value": "decimal", "unit": "varchar", "observed_at": "timestamp immutable", "evidence_ref": "varchar nullable"},
+        "unique": ["project_id,metric_code,observed_at"]
+      },
+      {
+        "name": "project_events",
+        "domain": "audit",
+        "purpose": "프로젝트 상태 변경 append-only 로그",
+        "columns": {"id": "uuid pk", "project_id": "uuid fk:projects.id", "event_type": "varchar immutable", "aggregate_type": "varchar immutable", "aggregate_id": "uuid immutable", "actor_id": "uuid fk:actors.id nullable", "idempotency_key": "varchar unique nullable", "payload_json": "json immutable", "occurred_at": "timestamp immutable"},
+        "indexes": ["project_id,occurred_at", "aggregate_type,aggregate_id,occurred_at"]
+      }
+    ]
+  },
+  "canvas": {
+    "defaultView": "workflow",
+    "views": [
+      {"id": "modules", "name": "3개 모듈", "source": "modules+moduleRelations+solid"},
+      {"id": "workflow", "name": "전체 워크플로우", "source": "stages+transitions"},
+      {"id": "objects", "name": "객체 책임", "source": "objects+objectRelations"},
+      {"id": "database", "name": "DB 정규화", "source": "database.tables"},
+      {"id": "security", "name": "보안·배포", "source": "securityGates"}
+    ],
+    "phaseOrder": ["sales", "planning", "commercial", "design", "delivery", "quality", "operations", "knowledge"],
+    "phaseLabels": {
+      "sales": "유입·상담",
+      "planning": "자료·기획",
+      "commercial": "범위·견적",
+      "design": "디자인·컨펌",
+      "delivery": "제작",
+      "quality": "검수·보안",
+      "operations": "배포·운영",
+      "knowledge": "이력 재사용"
+    }
+  }
+}

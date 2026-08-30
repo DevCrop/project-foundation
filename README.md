@@ -174,14 +174,18 @@ foundation.mjs github apply --repo <owner/name> --confirm <owner/name>
 - [FOUNDATION.md](FOUNDATION.md): 공통 규칙 본문의 유일한 원본
 - [PROJECT.md](PROJECT.md): 프로젝트 Intake, 결정, 예외, 예산
 - `.foundation/project.json`: 실행 명령, Page·Capability 상태, Docker·GitHub 설정
+- `.foundation/service-workflow.json`: 고객 유입부터 이력화, 객체 책임, 3NF DB, 보안·배포 규칙의 프로젝트 단일 원본
 - `.foundation/capabilities.json`: 선택 기능 catalog
 - `.foundation/recipes/*.json`: 다섯 개 영역의 분석 질문과 규칙 인덱스
 - [SOURCES.json](SOURCES.json): 공식 출처와 확인 날짜
 - `.foundation/manifest.json`: 설치 버전, 파일 소유권, managed SHA-256
 - `ARCHITECTURE.md`: 실제 설정에서 생성되는 읽기 전용 구조·UML 인덱스
+- `.foundation/service-workflow.json`: Foundry Console `/workflow`에서 React Flow로 표시하는 서비스 아키텍처 단일 원본
 - `AGENTS.md`, `CLAUDE.md`, Cursor Rule: 원본을 복제하지 않는 adapter
 
 `ARCHITECTURE.md`를 직접 편집하지 않는다. `architecture render`가 실제 page, Capability, 의존성에서 다시 생성하고 drift를 검출한다.
+
+서비스 제작 공정은 `.foundation/service-workflow.json`만 편집한다. Canvas는 별도 업무 데이터를 소유하지 않으며 JSON 변경을 새로고침 시 자동 반영한다.
 
 ## Codex → Cursor → Claude
 

@@ -48,8 +48,10 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p .release
           git archive --format=tar.gz --prefix="project-foundation-v${VERSION}/" --output=".release/project-foundation-v${VERSION}.tar.gz" HEAD^{tree}
+          cp .foundation/service-workflow.json .release/service-workflow.json
           cd .release
           sha256sum "project-foundation-v${VERSION}.tar.gz" > "project-foundation-v${VERSION}.tar.gz.sha256"
+          sha256sum service-workflow.json > service-workflow.json.sha256
       - name: Validate current Release consumer install
         env:
           FOUNDATION_PHP_CONTAINER: "1"
@@ -91,5 +93,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag --generate-notes
           gh release upload "$GITHUB_REF_NAME" \
             ".release/project-foundation-${GITHUB_REF_NAME}.tar.gz" \
-            ".release/project-foundation-${GITHUB_REF_NAME}.tar.gz.sha256"
+            ".release/project-foundation-${GITHUB_REF_NAME}.tar.gz.sha256" \
+            ".release/service-workflow.json" \
+            ".release/service-workflow.json.sha256"
           gh release edit "$GITHUB_REF_NAME" --draft=false --verify-tag
