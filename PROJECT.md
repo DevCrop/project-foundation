@@ -52,11 +52,11 @@ Foundation은 의존성 없는 단일 Node CLI가 프로젝트 정보를 분석�
 
 1. Architecture Governance — 객체 책임, SOLID, DB 정규화, Port·Adapter, 보안 게이트와 변경 절차
 2. Delivery Workflow — 고객 유입부터 요구사항 정규화, 설계, 디자인, 개발, 컨펌, 배포, 이력화까지의 상태 전환
-3. Release & Versioning — `main`·`prod` 보호, Preview 검증, 동일 artifact 승격, 버전·증거·rollback
+3. Release & Versioning — `main` 보호, Release Please PR 승인, Preview 검증, 동일 artifact 승격, 버전·증거·rollback
 
-세 모듈의 실행 가능한 계약은 `.foundation/service-workflow.json`이 소유한다. `docs/service-workflow-canvas.html`은 JSON을 읽어 그리는 읽기 전용 투영이며 업무 내용이나 화살표를 HTML에 직접 기록하지 않는다. Stage는 서로 직접 호출하지 않고 Orchestrator가 명시된 transition과 gate만 평가한다. 공급자 변경은 기존 Port의 Adapter 추가로 처리하고 도메인 객체의 책임은 유지한다.
+세 모듈의 실행 가능한 계약은 `.foundation/service-workflow.json`이 소유한다. Foundry Console의 `/workflow`는 Release asset으로 배포된 JSON을 읽어 그리는 읽기 전용 투영이며 UI 코드에 업무 내용이나 화살표를 중복 기록하지 않는다. Stage는 서로 직접 호출하지 않고 Orchestrator가 명시된 transition과 gate만 평가한다. 공급자 변경은 기존 Port의 Adapter 추가로 처리하고 도메인 객체의 책임은 유지한다.
 
-`main`은 기본 통합 브랜치, `prod`는 첫 운영 승인 시 한 번 만드는 운영 일치 브랜치다. 최초 release workflow는 두 브랜치의 존재와 보호 상태를 검사해 없는 브랜치만 멱등하게 생성·보호한다. 작업 브랜치 PR → `main` → Preview/UAT → 승인된 동일 commit·artifact digest → `prod` → Production 순으로 승격한다. 두 브랜치는 보호하고 force push를 금지하며, rollback은 이력을 되감지 않고 이전 immutable tag에서 새 patch release를 만든다. 실제 GitHub ruleset·Codex Security·호스팅 자동화는 각 계정과 Adapter를 확인하기 전까지 계획 상태로 둔다.
+`main`은 유일한 보호 통합 브랜치다. 작업 PR → `main` → Vercel Preview/UAT → Release Please PR 병합 → tag·GitHub Release → 태그 SHA의 Production 배포 순으로 승격하며 `prod` 브랜치는 사용하지 않는다. `main`의 직접 push·force push를 금지하고 rollback은 이력을 되감지 않고 이전 immutable tag에서 새 patch release를 만든다. 실제 GitHub ruleset·Codex Security·Vercel 자동화는 각 계정과 secret을 확인하기 전까지 activation gate로 둔다.
 
 ## Type Ownership
 

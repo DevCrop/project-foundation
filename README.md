@@ -180,7 +180,7 @@ foundation.mjs github apply --repo <owner/name> --confirm <owner/name>
 - [SOURCES.json](SOURCES.json): 공식 출처와 확인 날짜
 - `.foundation/manifest.json`: 설치 버전, 파일 소유권, managed SHA-256
 - `ARCHITECTURE.md`: 실제 설정에서 생성되는 읽기 전용 구조·UML 인덱스
-- `docs/service-workflow-canvas.html`: 서비스 워크플로우 JSON에서 동적으로 생성되는 읽기 전용 노드 Canvas
+- `.foundation/service-workflow.json`: Foundry Console `/workflow`에서 React Flow로 표시하는 서비스 아키텍처 단일 원본
 - `AGENTS.md`, `CLAUDE.md`, Cursor Rule: 원본을 복제하지 않는 adapter
 
 `ARCHITECTURE.md`를 직접 편집하지 않는다. `architecture render`가 실제 page, Capability, 의존성에서 다시 생성하고 drift를 검출한다.

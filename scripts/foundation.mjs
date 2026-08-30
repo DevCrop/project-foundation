@@ -597,8 +597,8 @@ function validateServiceWorkflowDocument(document, errors = []) {
 
   const release = document?.releaseVersioning;
   const branchNames = new Set(release?.branches?.map((branch) => branch.name) ?? []);
-  if (!release || release.status !== "planned" || !branchNames.has("main") || !branchNames.has("prod")) {
-    errors.push(`${prefix}: planned release versioning with main and prod branches is required`);
+  if (!release || release.status !== "planned" || !branchNames.has("main") || branchNames.has("prod")) {
+    errors.push(`${prefix}: planned release versioning requires protected main and must not define a prod branch`);
   }
   if (!release?.promotionFlow?.length || !release?.requiredEvidence?.length || !release?.activationGates?.length) {
     errors.push(`${prefix}: release promotion, evidence, and activation gates are required`);
@@ -2268,7 +2268,7 @@ async function agentContext(root) {
     const workflow = await readJson(serviceWorkflowPath);
     context.splice(1, 0,
       `Service workflow: ${workflow.workflowVersion} (${workflow.status}), ${workflow.modules.length} modules, ${workflow.stages.length} stages, ${workflow.objects.length} objects, ${workflow.database.tables.length} normalized tables.`,
-      "For service, customer, database, security, or release work, edit .foundation/service-workflow.json only; docs/service-workflow-canvas.html is a read-only projection.",
+      "For service, customer, database, security, or release work, edit .foundation/service-workflow.json only; Foundry Console /workflow is its read-only projection.",
     );
   }
   return context.join("\n");

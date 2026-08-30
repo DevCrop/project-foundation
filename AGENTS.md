@@ -10,7 +10,7 @@
 
 규칙 우선순위는 시스템·도구 보안 정책, 현재 사용자의 명시적 요청, 프로젝트 규칙, Foundation 기본값 순서다. 공통 규칙 본문을 이 파일에 복사하지 않는다.
 
-서비스 워크플로우를 바꿀 때는 JSON의 modules·objects·stages·transitions·database·securityGates·releaseVersioning을 함께 검증한다. `docs/service-workflow-canvas.html`은 해당 JSON을 동적으로 표시하는 읽기 전용 화면이므로 업무 내용이나 연결선을 HTML에 직접 복제하지 않는다.
+서비스 워크플로우를 바꿀 때는 JSON의 modules·objects·stages·transitions·database·securityGates·releaseVersioning을 함께 검증한다. Foundry Console의 `/workflow` 화면은 해당 JSON을 표시하는 읽기 전용 투영이므로 업무 내용이나 연결선을 UI 코드에 직접 복제하지 않는다.
 
 기본 검증:
 
